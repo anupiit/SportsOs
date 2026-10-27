@@ -1,0 +1,56 @@
+# Local stack: PostgreSQL + API + web.
+#   docker compose up -d --build
+#   docker compose exec api npm run seed      # demo data (password: sportsos123)
+# Then open http://localhost:3000
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: sportsos
+      POSTGRES_PASSWORD: sportsos
+      POSTGRES_DB: sportsos
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sportsos -d sportsos"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://sportsos:sportsos@postgres:5432/sportsos?schema=public
+      JWT_SECRET: ${JWT_SECRET:-replace-this-dev-secret-before-deploying}
+      JWT_EXPIRES_IN: 12h
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8081
+      ALLOWED_EMAIL_DOMAIN: iitism.ac.in
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-opus-5-5}
+      PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+      PINECONE_INDEX: sportsos-knowledge
+      PINECONE_NAMESPACE: iitism
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

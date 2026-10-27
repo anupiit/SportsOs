@@ -1,0 +1,495 @@
+// SportsOS data model — PostgreSQL via Prisma ORM (proposal §5.3, data layer).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------ identity
+
+enum Role {
+  DIRECTOR
+  DEAN_SW
+  SPEC_PRESIDENT
+  SPORTS_OFFICER
+  GENERAL_SECRETARY
+  EVENT_COMMITTEE
+  COACH
+  GROUND_STAFF
+  EQUIPMENT_MANAGER
+  SECURITY_STAFF
+  OPERATIONS_STAFF
+  SPORTS_COUNCIL
+  SPORT_COORDINATOR
+  HOSTEL_SECRETARY
+  MEDIA_NOMINEE
+  CLUB_MEMBER
+  STUDENT
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(STUDENT)
+  admissionNo  String?  @unique
+  hostel       String?
+  phone        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  bookings           Booking[]           @relation("BookingUser")
+  approvedBookings   Booking[]           @relation("BookingApprover")
+  memberships        ClubMembership[]
+  coachedClubs       Club[]              @relation("ClubCoach")
+  sessionsCreated    AttendanceSession[]
+  attendance         AttendanceRecord[]
+  attempts           AttendanceAttempt[]
+  borrowed           EquipmentIssue[]    @relation("IssueBorrower")
+  issuedByMe         EquipmentIssue[]    @relation("IssueIssuer")
+  receivedByMe       EquipmentIssue[]    @relation("IssueReceiver")
+  tournaments        Tournament[]
+  notifications      Notification[]
+  complaintsRaised   Complaint[]         @relation("ComplaintRaiser")
+  complaintsAssigned Complaint[]         @relation("ComplaintAssignee")
+  achievements       Achievement[]       @relation("AchievementOwner")
+  achievementsVerified Achievement[]     @relation("AchievementVerifier")
+  auditLogs          AuditLog[]
+}
+
+// ------------------------------------------------------------------ facilities & bookings
+
+enum FacilityType {
+  GROUND
+  COURT
+  INDOOR_HALL
+  POOL
+  GYM
+  TRACK
+}
+
+enum FacilityStatus {
+  OPEN
+  MAINTENANCE
+  CLOSED
+}
+
+model Facility {
+  id               String         @id @default(cuid())
+  name             String
+  code             String         @unique
+  type             FacilityType
+  sports           String[]
+  latitude         Float
+  longitude        Float
+  geofenceRadiusM  Int            @default(60)
+  status           FacilityStatus @default(OPEN)
+  statusNote       String?
+  openMinute       Int            @default(360)
+  closeMinute      Int            @default(1260)
+  slotMinutes      Int            @default(60)
+  capacity         Int            @default(20)
+  requiresApproval Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  bookings    Booking[]
+  sessions    AttendanceSession[]
+  tournaments Tournament[]
+  matches     Match[]
+  complaints  Complaint[]
+}
+
+enum BookingType {
+  CASUAL
+  CLUB_PRACTICE
+  EVENT
+  MAINTENANCE
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  facilityId      String
+  facility        Facility      @relation(fields: [facilityId], references: [id])
+  userId          String
+  user            User          @relation("BookingUser", fields: [userId], references: [id])
+  clubId          String?
+  club            Club?         @relation(fields: [clubId], references: [id])
+  start           DateTime
+  end             DateTime
+  purpose         String
+  type            BookingType   @default(CASUAL)
+  status          BookingStatus @default(PENDING)
+  participants    Int           @default(1)
+  approvedById    String?
+  approvedBy      User?         @relation("BookingApprover", fields: [approvedById], references: [id])
+  rejectionReason String?
+  passToken       String        @unique @default(cuid())
+  checkedInAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([facilityId, start])
+  @@index([userId])
+}
+
+// ------------------------------------------------------------------ clubs
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  LEFT
+}
+
+enum MembershipRole {
+  MEMBER
+  CAPTAIN
+  VICE_CAPTAIN
+}
+
+model Club {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  sport       String
+  description String?
+  coachId     String?
+  coach       User?    @relation("ClubCoach", fields: [coachId], references: [id])
+  createdAt   DateTime @default(now())
+
+  members  ClubMembership[]
+  bookings Booking[]
+  sessions AttendanceSession[]
+}
+
+model ClubMembership {
+  id       String           @id @default(cuid())
+  clubId   String
+  club     Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User             @relation(fields: [userId], references: [id])
+  status   MembershipStatus @default(PENDING)
+  role     MembershipRole   @default(MEMBER)
+  joinedAt DateTime         @default(now())
+
+  @@unique([clubId, userId])
+}
+
+// ------------------------------------------------------------------ verified attendance
+
+enum SessionStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum AttemptOutcome {
+  ACCEPTED
+  BAD_OTP
+  OUT_OF_GEOFENCE
+  LOW_ACCURACY
+  DUPLICATE
+  DEVICE_REUSED
+  SESSION_CLOSED
+  NOT_ELIGIBLE
+}
+
+model AttendanceSession {
+  id             String        @id @default(cuid())
+  title          String
+  facilityId     String
+  facility       Facility      @relation(fields: [facilityId], references: [id])
+  clubId         String?
+  club           Club?         @relation(fields: [clubId], references: [id])
+  createdById    String
+  createdBy      User          @relation(fields: [createdById], references: [id])
+  startsAt       DateTime      @default(now())
+  endsAt         DateTime
+  status         SessionStatus @default(ACTIVE)
+  /// HMAC key for the rotating OTP; never returned by the API.
+  secret         String
+  otpStepSeconds Int           @default(30)
+  createdAt      DateTime      @default(now())
+
+  records  AttendanceRecord[]
+  attempts AttendanceAttempt[]
+
+  @@index([status, endsAt])
+}
+
+model AttendanceRecord {
+  id          String            @id @default(cuid())
+  sessionId   String
+  session     AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  checkedInAt DateTime          @default(now())
+  latitude    Float
+  longitude   Float
+  accuracyM   Float
+  distanceM   Float
+  deviceId    String?
+
+  @@unique([sessionId, userId])
+  @@index([checkedInAt])
+}
+
+/// Every check-in attempt, accepted or not — the integrity trail behind proxy detection.
+model AttendanceAttempt {
+  id        String            @id @default(cuid())
+  sessionId String
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id])
+  outcome   AttemptOutcome
+  distanceM Float?
+  accuracyM Float?
+  deviceId  String?
+  createdAt DateTime          @default(now())
+
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------------------ inventory
+
+enum IssueStatus {
+  ISSUED
+  RETURNED
+  OVERDUE
+  LOST
+}
+
+model Equipment {
+  id           String   @id @default(cuid())
+  name         String
+  sport        String
+  category     String
+  qrCode       String   @unique @default(cuid())
+  totalQty     Int
+  availableQty Int
+  damagedQty   Int      @default(0)
+  minStock     Int      @default(2)
+  location     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  issues     EquipmentIssue[]
+  complaints Complaint[]
+}
+
+model EquipmentIssue {
+  id           String      @id @default(cuid())
+  equipmentId  String
+  equipment    Equipment   @relation(fields: [equipmentId], references: [id])
+  borrowerId   String
+  borrower     User        @relation("IssueBorrower", fields: [borrowerId], references: [id])
+  issuedById   String
+  issuedBy     User        @relation("IssueIssuer", fields: [issuedById], references: [id])
+  receivedById String?
+  receivedBy   User?       @relation("IssueReceiver", fields: [receivedById], references: [id])
+  quantity     Int
+  issuedAt     DateTime    @default(now())
+  dueAt        DateTime
+  returnedAt   DateTime?
+  returnedQty  Int?
+  damagedQty   Int?
+  status       IssueStatus @default(ISSUED)
+  note         String?
+
+  @@index([status, dueAt])
+  @@index([issuedAt])
+}
+
+/// Append-only, SHA-256 hash-chained ledger: hash = sha256(prevHash || canonical(entry)).
+model AuditLog {
+  seq       Int      @id @default(autoincrement())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String
+  payload   Json
+  prevHash  String
+  hash      String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
+// ------------------------------------------------------------------ tournaments
+
+enum TournamentFormat {
+  SINGLE_ELIMINATION
+  ROUND_ROBIN
+}
+
+enum TournamentStatus {
+  DRAFT
+  ONGOING
+  COMPLETED
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  BYE
+}
+
+model Tournament {
+  id          String           @id @default(cuid())
+  name        String
+  sport       String
+  format      TournamentFormat
+  status      TournamentStatus @default(DRAFT)
+  description String?
+  startDate   DateTime
+  facilityId  String?
+  facility    Facility?        @relation(fields: [facilityId], references: [id])
+  organizerId String
+  organizer   User             @relation(fields: [organizerId], references: [id])
+  championId  String?
+  createdAt   DateTime         @default(now())
+
+  teams   Team[]
+  matches Match[]
+}
+
+model Team {
+  id           String     @id @default(cuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name         String
+  hostel       String?
+  seed         Int?
+
+  homeMatches Match[] @relation("HomeTeam")
+  awayMatches Match[] @relation("AwayTeam")
+
+  @@unique([tournamentId, name])
+}
+
+model Match {
+  id           String      @id @default(cuid())
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  round        Int
+  position     Int
+  homeTeamId   String?
+  homeTeam     Team?       @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeamId   String?
+  awayTeam     Team?       @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  homeScore    Int?
+  awayScore    Int?
+  winnerId     String?
+  status       MatchStatus @default(SCHEDULED)
+  scheduledAt  DateTime?
+  facilityId   String?
+  facility     Facility?   @relation(fields: [facilityId], references: [id])
+  nextMatchId  String?
+  /// 0 = winner fills the next match's home slot, 1 = away slot.
+  nextSlot     Int?
+
+  @@unique([tournamentId, round, position])
+}
+
+// ------------------------------------------------------------------ engagement
+
+enum NotificationType {
+  INFO
+  ALERT
+  APPROVAL
+  REMINDER
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      NotificationType @default(INFO)
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+}
+
+enum ComplaintCategory {
+  FACILITY
+  EQUIPMENT
+  STAFF
+  BOOKING
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Complaint {
+  id           String            @id @default(cuid())
+  raisedById   String
+  raisedBy     User              @relation("ComplaintRaiser", fields: [raisedById], references: [id])
+  category     ComplaintCategory
+  subject      String
+  description  String
+  facilityId   String?
+  facility     Facility?         @relation(fields: [facilityId], references: [id])
+  equipmentId  String?
+  equipment    Equipment?        @relation(fields: [equipmentId], references: [id])
+  status       ComplaintStatus   @default(OPEN)
+  priority     Priority          @default(MEDIUM)
+  assignedToId String?
+  assignedTo   User?             @relation("ComplaintAssignee", fields: [assignedToId], references: [id])
+  resolution   String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+enum AchievementLevel {
+  HOSTEL
+  INSTITUTE
+  INTER_IIT
+  STATE
+  NATIONAL
+  INTERNATIONAL
+}
+
+model Achievement {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation("AchievementOwner", fields: [userId], references: [id])
+  title        String
+  sport        String
+  level        AchievementLevel
+  position     String?
+  date         DateTime
+  verifiedById String?
+  verifiedBy   User?            @relation("AchievementVerifier", fields: [verifiedById], references: [id])
+  createdAt    DateTime         @default(now())
+}

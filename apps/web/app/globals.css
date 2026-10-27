@@ -1,0 +1,339 @@
+@import "tailwindcss";
+
+/*
+ * SportsOS design tokens. Palette follows the proposal deck: deep navy primary,
+ * brighter blue for interactive accents, terracotta for warnings/highlights,
+ * off-white planes. Every color is a CSS variable so dark mode swaps in one place.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f5f4ef;
+  --surface: #ffffff;
+  --surface-2: #f0efe9;
+  --surface-3: #e7e5dd;
+  --border: #e2e0d8;
+  --border-strong: #c9c6bb;
+  --text: #141a33;
+  --text-2: #4b5068;
+  --muted: #7d8196;
+  --primary: #1e2a5a;
+  --primary-hover: #26346d;
+  --primary-fg: #ffffff;
+  --accent: #2f5bd3;
+  --accent-hover: #2650bd;
+  --accent-soft: #e7edfb;
+  --accent-ink: #1f4bb8;
+  --warn: #c8735a;
+  --warn-soft: #f8ebe5;
+  --warn-ink: #9a4a33;
+  --good: #1b7f4b;
+  --good-soft: #e3f3e9;
+  --good-ink: #146038;
+  --danger: #c53a3a;
+  --danger-soft: #fbe7e7;
+  --danger-ink: #a32a2a;
+  --amber: #b77905;
+  --amber-soft: #fbf1d9;
+  --amber-ink: #8a5a00;
+  --sidebar: #1e2a5a;
+  --sidebar-2: #26346d;
+  --sidebar-text: #c9d0ee;
+  --sidebar-active: #ffffff;
+  --ring: rgba(47, 91, 211, 0.35);
+  --shadow: 0 1px 2px rgba(20, 26, 51, 0.06), 0 1px 3px rgba(20, 26, 51, 0.04);
+  --shadow-lg: 0 10px 30px rgba(20, 26, 51, 0.16);
+
+  /* Chart tokens (dataviz reference palette, validated against --surface) */
+  --chart-surface: #ffffff;
+  --chart-grid: #e7e5dd;
+  --chart-axis: #c9c6bb;
+  --chart-ink: #4b5068;
+  --chart-muted: #7d8196;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --seq-0: #f0efec;
+  --seq-1: #cde2fb;
+  --seq-2: #9ec5f4;
+  --seq-3: #6da7ec;
+  --seq-4: #3987e5;
+  --seq-5: #256abf;
+  --seq-6: #184f95;
+  --seq-7: #0d366b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d1120;
+    --surface: #161b2e;
+    --surface-2: #1d2339;
+    --surface-3: #262d47;
+    --border: #2a3150;
+    --border-strong: #3a4268;
+    --text: #eef0f7;
+    --text-2: #b6bbd0;
+    --muted: #8a8fa8;
+    --primary: #3b55c4;
+    --primary-hover: #4863d6;
+    --primary-fg: #ffffff;
+    --accent: #6d8ef0;
+    --accent-hover: #86a1f4;
+    --accent-soft: #1f2a52;
+    --accent-ink: #a9bcf7;
+    --warn: #e08f75;
+    --warn-soft: #3a2420;
+    --warn-ink: #f0b39f;
+    --good: #3fbf7a;
+    --good-soft: #15301f;
+    --good-ink: #7ad9a4;
+    --danger: #ec6b6b;
+    --danger-soft: #3a1d22;
+    --danger-ink: #f5a3a3;
+    --amber: #e3a72f;
+    --amber-soft: #372a12;
+    --amber-ink: #f2c66d;
+    --sidebar: #0a0e1c;
+    --sidebar-2: #151b33;
+    --sidebar-text: #aab3d6;
+    --sidebar-active: #ffffff;
+    --ring: rgba(109, 142, 240, 0.4);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+    --chart-surface: #161b2e;
+    --chart-grid: #262d47;
+    --chart-axis: #3a4268;
+    --chart-ink: #b6bbd0;
+    --chart-muted: #8a8fa8;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --seq-0: #1d2339;
+    --seq-1: #104281;
+    --seq-2: #184f95;
+    --seq-3: #1c5cab;
+    --seq-4: #256abf;
+    --seq-5: #3987e5;
+    --seq-6: #6da7ec;
+    --seq-7: #b7d3f6;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1120;
+  --surface: #161b2e;
+  --surface-2: #1d2339;
+  --surface-3: #262d47;
+  --border: #2a3150;
+  --border-strong: #3a4268;
+  --text: #eef0f7;
+  --text-2: #b6bbd0;
+  --muted: #8a8fa8;
+  --primary: #3b55c4;
+  --primary-hover: #4863d6;
+  --primary-fg: #ffffff;
+  --accent: #6d8ef0;
+  --accent-hover: #86a1f4;
+  --accent-soft: #1f2a52;
+  --accent-ink: #a9bcf7;
+  --warn: #e08f75;
+  --warn-soft: #3a2420;
+  --warn-ink: #f0b39f;
+  --good: #3fbf7a;
+  --good-soft: #15301f;
+  --good-ink: #7ad9a4;
+  --danger: #ec6b6b;
+  --danger-soft: #3a1d22;
+  --danger-ink: #f5a3a3;
+  --amber: #e3a72f;
+  --amber-soft: #372a12;
+  --amber-ink: #f2c66d;
+  --sidebar: #0a0e1c;
+  --sidebar-2: #151b33;
+  --sidebar-text: #aab3d6;
+  --sidebar-active: #ffffff;
+  --ring: rgba(109, 142, 240, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --chart-surface: #161b2e;
+  --chart-grid: #262d47;
+  --chart-axis: #3a4268;
+  --chart-ink: #b6bbd0;
+  --chart-muted: #8a8fa8;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --seq-0: #1d2339;
+  --seq-1: #104281;
+  --seq-2: #184f95;
+  --seq-3: #1c5cab;
+  --seq-4: #256abf;
+  --seq-5: #3987e5;
+  --seq-6: #6da7ec;
+  --seq-7: #b7d3f6;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-ink: var(--warn-ink);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-good-ink: var(--good-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-amber-ink: var(--amber-ink);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-2: var(--sidebar-2);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-active: var(--sidebar-active);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.toast-in {
+  animation: toast-in 160ms ease-out;
+}
+
+/* Data tables */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+.data-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.data-table tbody tr:hover td {
+  background: var(--surface-2);
+}
+.data-table td.num,
+.data-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Markdown output */
+.prose-sm h1 { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.5rem; }
+.prose-sm h2 { font-size: 1.1rem; font-weight: 700; margin: 0.75rem 0 0.4rem; }
+.prose-sm h3 { font-size: 1rem; font-weight: 600; margin: 0.6rem 0 0.3rem; }
+.prose-sm h4 { font-size: 0.95rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+.prose-sm p { margin: 0.4rem 0; line-height: 1.6; }
+.prose-sm ul { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
+.prose-sm ol { list-style: decimal; padding-left: 1.25rem; margin: 0.4rem 0; }
+.prose-sm li { margin: 0.15rem 0; line-height: 1.55; }
+.prose-sm code { font-family: var(--font-mono); font-size: 0.85em; background: var(--surface-2); padding: 0.1rem 0.3rem; border-radius: 4px; }
+.prose-sm pre { background: var(--surface-2); padding: 0.75rem; border-radius: 8px; overflow-x: auto; margin: 0.5rem 0; }
+.prose-sm pre code { background: transparent; padding: 0; }
+.prose-sm blockquote { border-left: 3px solid var(--accent); padding-left: 0.75rem; color: var(--text-2); margin: 0.5rem 0; }
+.prose-sm table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; width: 100%; }
+.prose-sm th, .prose-sm td { border: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: left; }
+.prose-sm th { background: var(--surface-2); font-weight: 600; }
+.prose-sm hr { border: 0; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+.prose-sm a { color: var(--accent-ink); text-decoration: underline; }
+
+/* Printing: only the element marked .print-area is printed (QR labels, reports). */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .card {
+    border: 1px solid CanvasText;
+  }
+}

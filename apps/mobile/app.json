@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "SportsOS",
+    "slug": "sportsos",
+    "version": "0.1.0",
+    "scheme": "sportsos",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "in.ac.iitism.sportsos",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SportsOS uses your location to verify that you are at the facility when you check in to a practice session.",
+        "NSCameraUsageDescription": "SportsOS uses the camera to scan equipment, booking-pass and session QR codes."
+      }
+    },
+    "android": {
+      "package": "in.ac.iitism.sportsos",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SportsOS uses your location to verify that you are at the facility when you check in to a practice session."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SportsOS uses the camera to scan equipment, booking-pass and session QR codes.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
