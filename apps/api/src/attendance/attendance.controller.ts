@@ -1,8 +1,8 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from '../common/auth-user';
-import { CurrentUser, RequirePermission } from '../common/decorators';
-import { CheckInDto, CreateSessionDto } from './attendance.dto';
+import { CurrentUser, RequireAnyPermission, RequirePermission } from '../common/decorators';
+import { CheckInDto, CorrectionDto, CreateSessionDto } from './attendance.dto';
 import { AttendanceService } from './attendance.service';
 
 @Controller('attendance')
@@ -10,7 +10,7 @@ export class AttendanceController {
   constructor(private readonly attendance: AttendanceService) {}
 
   @Post('sessions')
-  @RequirePermission('attendance:manage')
+  @RequirePermission('attendance.manage')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateSessionDto) {
     return this.attendance.create(user, dto);
   }
@@ -26,26 +26,47 @@ export class AttendanceController {
   }
 
   @Get('sessions/:id/otp')
-  @RequirePermission('attendance:manage')
+  @RequirePermission('attendance.manage')
   otp(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.attendance.otp(user, id);
   }
 
   @Post('sessions/:id/close')
   @HttpCode(200)
-  @RequirePermission('attendance:manage')
+  @RequirePermission('attendance.manage')
   close(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.attendance.close(user, id);
   }
 
+  @Post('sessions/:id/corrections')
+  @RequirePermission('attendance.manage')
+  correct(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CorrectionDto) {
+    return this.attendance.correct(user, id, dto);
+  }
+
+  @Get('sessions/:id/corrections')
+  @RequireAnyPermission('attendance.manage', 'attendance.view_team')
+  corrections(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.attendance.corrections(user, id);
+  }
+
+  @Get('reports/club/:clubId')
+  @RequirePermission('attendance.view_team')
+  report(@CurrentUser() user: AuthUser, @Param('clubId') clubId: string, @Query('days') days?: string) {
+    const d = Math.min(365, Math.max(1, Number(days) || 30));
+    return this.attendance.teamReport(user, clubId, d);
+  }
+
   @Post('check-in')
   @HttpCode(200)
+  @RequirePermission('attendance.mark')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   checkIn(@CurrentUser() user: AuthUser, @Body() dto: CheckInDto) {
     return this.attendance.checkIn(user, dto);
   }
 
   @Get('me')
+  @RequirePermission('attendance.view_own')
   mine(@CurrentUser() user: AuthUser) {
     return this.attendance.mine(user);
   }

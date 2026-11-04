@@ -2,9 +2,14 @@ import { ConfigService } from '@nestjs/config';
 import type { AnalyticsService } from '../analytics/analytics.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { AiService, AskEvent } from './ai.service';
+import { mayRead } from './vector-store';
+
+const STAFF = { id: 'u-staff', permissions: ['facility.view', 'inventory.view', 'analytics.view'] };
+const STUDENT = { id: 'u-student', permissions: ['facility.view', 'inventory.view', 'ai.use'] };
 import type { KnowledgeService } from './knowledge.service';
 
 const DOCS = [
+  { id: 'attendance-integrity', kind: 'analytics', title: 'Attendance integrity (last 30 days)', text: 'Rejected tennis check-ins: device reused 4, out of geofence 14.' },
   { id: 'facility-TN-1', kind: 'facility', title: 'Lawn Tennis Courts (TN-1)', text: 'Current status: MAINTENANCE — court 2 resurfacing.' },
   { id: 'equipment-badminton', kind: 'equipment', title: 'Badminton equipment stock', text: 'Shuttlecock tube: 3 available — LOW STOCK.' },
 ];
@@ -35,8 +40,8 @@ describe('AiService', () => {
   it('answers offline from retrieved documents when no Anthropic key is set', async () => {
     const ai = service({});
     await ai.reindex();
-    expect(ai.status()).toMatchObject({ llm: 'offline', vectorStore: 'local', indexedDocuments: 2 });
-    const events = await collect(ai.askStream({ question: 'Is the tennis court open?' }));
+    expect(ai.status()).toMatchObject({ llm: 'offline', vectorStore: 'local', indexedDocuments: 3 });
+    const events = await collect(ai.askStream({ question: 'Is the tennis court open?' }, STAFF));
     expect(events[0]).toMatchObject({ type: 'sources' });
     expect((events[0] as { sources: { title: string }[] }).sources[0].title).toContain('Tennis');
     expect(events.at(-1)).toEqual({ type: 'done', generatedBy: 'offline' });
@@ -48,7 +53,7 @@ describe('AiService', () => {
     const stream = jest.fn().mockReturnValue(fakeStream(['Court 2 is ', 'being resurfaced.']));
     (ai as unknown as { claude: unknown }).claude = { beta: { messages: { stream } } };
 
-    const events = await collect(ai.askStream({ question: 'Is the tennis court open?', history: [{ role: 'assistant', content: 'dangling' }] }));
+    const events = await collect(ai.askStream({ question: 'Is the tennis court open?', history: [{ role: 'assistant', content: 'dangling' }] }, STAFF));
     const params = stream.mock.calls[0][0];
     expect(params).toMatchObject({ model: 'claude-opus-5-5', fallbacks: 'default', betas: ['server-side-fallback-2026-07-01'], output_config: { effort: 'medium' } });
     expect(params.thinking).toBeUndefined();
@@ -62,7 +67,7 @@ describe('AiService', () => {
     const ai = service({ ANTHROPIC_API_KEY: 'test-key' });
     await ai.reindex();
     (ai as unknown as { claude: unknown }).claude = { beta: { messages: { stream: () => fakeStream([], 'refusal') } } };
-    const events = await collect(ai.askStream({ question: 'anything' }));
+    const events = await collect(ai.askStream({ question: 'anything' }, STAFF));
     expect(events.some((e) => e.type === 'delta' && /can’t help/.test(e.text))).toBe(true);
   });
 
@@ -71,8 +76,42 @@ describe('AiService', () => {
     await ai.reindex();
     const failing = { async *[Symbol.asyncIterator]() { throw new Error('network down'); }, finalMessage: async () => ({}) };
     (ai as unknown as { claude: unknown }).claude = { beta: { messages: { stream: () => failing } } };
-    const events = await collect(ai.askStream({ question: 'shuttlecock stock' }));
+    const events = await collect(ai.askStream({ question: 'shuttlecock stock' }, STAFF));
     expect(events.map((e) => e.type)).toEqual(['sources', 'error', 'delta', 'done']);
     expect(events.at(-1)).toEqual({ type: 'done', generatedBy: 'offline' });
+  });
+
+  describe('permission isolation', () => {
+    it('never retrieves documents the asker cannot read through the API', async () => {
+      const ai = service({});
+      await ai.reindex();
+      const events = await collect(ai.askStream({ question: 'tennis rejected check-ins device reused geofence integrity' }, STUDENT));
+      const ids = (events[0] as { sources: { id: string }[] }).sources.map((s) => s.id);
+      expect(ids).not.toContain('attendance-integrity');
+      const text = events.filter((e) => e.type === 'delta').map((e) => (e as { text: string }).text).join('');
+      expect(text).not.toMatch(/device reused/i);
+    });
+
+    it('withheld context never reaches Claude', async () => {
+      const ai = service({ ANTHROPIC_API_KEY: 'test-key' });
+      await ai.reindex();
+      const stream = jest.fn().mockReturnValue(fakeStream(['ok']));
+      (ai as unknown as { claude: unknown }).claude = { beta: { messages: { stream } } };
+      await collect(ai.askStream({ question: 'attendance integrity device reused' }, STUDENT));
+      const sent = JSON.stringify(stream.mock.calls[0][0].messages);
+      expect(sent).not.toContain('device reused 4');
+    });
+
+    it('staff with analytics.view do receive analytics documents', async () => {
+      const ai = service({});
+      await ai.reindex();
+      const events = await collect(ai.askStream({ question: 'attendance integrity device reused' }, STAFF));
+      expect((events[0] as { sources: { id: string }[] }).sources.map((s) => s.id)).toContain('attendance-integrity');
+    });
+
+    it('denies unknown document ids by default', () => {
+      expect(mayRead(['ai.use'], 'some-new-analytics-doc')).toBe(false);
+      expect(mayRead(['ai.use'], 'policies')).toBe(true);
+    });
   });
 });

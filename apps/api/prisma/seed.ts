@@ -1,17 +1,34 @@
 /**
- * Demo data for SportsOS: one account per role, ~60 students, nine facilities,
- * clubs, and ~10 weeks of history (bookings, verified attendance, equipment
- * loans, tournaments) so dashboards and forecasts have something to show.
+ * DEMO data for SportsOS: one account per role, 60 synthetic students, nine
+ * facilities, clubs, and ~10 weeks of history (bookings, verified attendance,
+ * equipment loans, tournaments) so dashboards and forecasts have something to show.
  *
- * Deterministic (seeded PRNG). Re-running wipes and recreates everything.
- * Facility coordinates are approximate placeholders near the IIT (ISM) campus;
- * survey the real grounds before relying on the geofence.
+ * Everything here is SYNTHETIC and flagged `isDemo = true`:
+ *  - people are named "[DEMO] …" / "Demo Student NN", with @sportsos.demo emails and
+ *    "ZZ" admission numbers that cannot collide with real IIT (ISM) students;
+ *  - hostels are "Hostel A–I", not real hostel names;
+ *  - facility names, hours and coordinates are placeholders, not surveyed data.
+ * Real institutional data enters only through the admin import (see IIT_ISM_DATA_INTEGRATION.md).
+ *
+ * Deterministic (seeded PRNG). Re-running WIPES the database, so it refuses to run
+ * when non-demo data exists unless SEED_FORCE_RESET=true, and never in production
+ * unless SEED_ALLOW_PRODUCTION=true as well.
  */
 import { AttemptOutcome, BookingStatus, BookingType, Prisma, PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes, randomUUID } from 'crypto';
+import { join } from 'path';
 import { computeHash, GENESIS_HASH } from '../src/common/hash-chain';
 import { roundRobin, singleElimination } from '../src/tournaments/bracket';
+
+// `npm run seed` runs outside Nest, so load apps/api/.env ourselves when DATABASE_URL isn't exported
+if (!process.env.DATABASE_URL) {
+  try {
+    process.loadEnvFile(join(__dirname, '..', '.env'));
+  } catch {
+    /* no .env: rely on the environment */
+  }
+}
 
 const prisma = new PrismaClient();
 
@@ -50,10 +67,8 @@ const HISTORY_DAYS = 70;
 const FUTURE_DAYS = 10;
 
 // ------------------------------------------------------------------ reference data
-const HOSTELS = ['Jasper', 'Amber', 'Diamond', 'Sapphire', 'Topaz', 'Ruby', 'Emerald', 'Opal', 'Rosaline'];
-const FIRST = ['Aarav', 'Vivaan', 'Aditya', 'Arjun', 'Rohan', 'Ishaan', 'Kabir', 'Rahul', 'Siddharth', 'Karan', 'Nikhil', 'Pranav', 'Harsh', 'Yash', 'Ankit', 'Manish', 'Saurabh', 'Deepak', 'Rakesh', 'Abhishek', 'Ananya', 'Diya', 'Isha', 'Kavya', 'Meera', 'Nisha', 'Pooja', 'Priya', 'Riya', 'Sneha', 'Tanvi', 'Shreya'];
-const LAST = ['Sharma', 'Verma', 'Singh', 'Kumar', 'Gupta', 'Mishra', 'Yadav', 'Das', 'Mahato', 'Prasad', 'Jha', 'Pandey', 'Sinha', 'Reddy', 'Nair', 'Patel', 'Mondal', 'Ghosh', 'Tiwari', 'Chauhan'];
-const BRANCH = ['JE', 'JE', 'JE', 'JM', 'JP'];
+const HOSTELS = ['Hostel A', 'Hostel B', 'Hostel C', 'Hostel D', 'Hostel E', 'Hostel F', 'Hostel G', 'Hostel H', 'Hostel I'];
+const BRANCH = ['ZZ']; // never a real IIT (ISM) branch code
 
 interface StaffSeed {
   email: string;
@@ -64,25 +79,25 @@ interface StaffSeed {
 }
 
 const STAFF: StaffSeed[] = [
-  { email: 'admin@iitism.ac.in', name: 'System Administrator', role: 'ADMIN' },
-  { email: 'director@iitism.ac.in', name: 'Office of the Director', role: 'DIRECTOR' },
-  { email: 'dean.sw@iitism.ac.in', name: "Dean (Students' Welfare)", role: 'DEAN_SW' },
-  { email: 'spec.president@iitism.ac.in', name: 'President, SPEC', role: 'SPEC_PRESIDENT' },
-  { email: 'peso@iitism.ac.in', name: 'Sports Officer (PESO)', role: 'SPORTS_OFFICER' },
-  { email: 'gsec.sports@iitism.ac.in', name: 'Aditya Raj (GSec Sports)', role: 'GENERAL_SECRETARY', hostel: 'Diamond', admissionNo: '22JE0901' },
-  { email: 'events@iitism.ac.in', name: 'Event Committee Desk', role: 'EVENT_COMMITTEE' },
-  { email: 'coach.football@iitism.ac.in', name: 'Coach Ramesh Oraon', role: 'COACH' },
-  { email: 'coach.basketball@iitism.ac.in', name: 'Coach Sunita Kerketta', role: 'COACH' },
-  { email: 'ground@iitism.ac.in', name: 'Ground Staff (Main Grounds)', role: 'GROUND_STAFF' },
-  { email: 'equipment@iitism.ac.in', name: 'Equipment Room Manager', role: 'EQUIPMENT_MANAGER' },
-  { email: 'security@iitism.ac.in', name: 'Sports Complex Security', role: 'SECURITY_STAFF' },
-  { email: 'operations@iitism.ac.in', name: 'Sports Operations Desk', role: 'OPERATIONS_STAFF' },
-  { email: 'council@iitism.ac.in', name: 'Sports Council', role: 'SPORTS_COUNCIL' },
-  { email: 'coord.cricket@iitism.ac.in', name: 'Vikram Tudu (Cricket Coordinator)', role: 'SPORT_COORDINATOR', hostel: 'Topaz', admissionNo: '22JE0902' },
-  { email: 'hostelsec.jasper@iitism.ac.in', name: 'Rohit Mahto (Jasper Sports Sec.)', role: 'HOSTEL_SECRETARY', hostel: 'Jasper', admissionNo: '23JE0903' },
-  { email: 'media@iitism.ac.in', name: 'Sports Media Nominee', role: 'MEDIA_NOMINEE', hostel: 'Amber', admissionNo: '23JE0904' },
-  { email: '22je0143@iitism.ac.in', name: 'Anup Kumar', role: 'CLUB_MEMBER', hostel: 'Jasper', admissionNo: '22JE0143' },
-  { email: 'student@iitism.ac.in', name: 'Casual Student', role: 'STUDENT', hostel: 'Sapphire', admissionNo: '24JE0999' },
+  { email: 'admin@sportsos.demo', name: '[DEMO] System Administrator', role: 'ADMIN' },
+  { email: 'director@sportsos.demo', name: '[DEMO] Office of the Director', role: 'DIRECTOR' },
+  { email: 'dean.sw@sportsos.demo', name: "[DEMO] Dean (Students' Welfare)", role: 'DEAN_SW' },
+  { email: 'spec.president@sportsos.demo', name: '[DEMO] President, SPEC', role: 'SPEC_PRESIDENT' },
+  { email: 'peso@sportsos.demo', name: '[DEMO] Sports Officer (PESO)', role: 'SPORTS_OFFICER' },
+  { email: 'gsec.sports@sportsos.demo', name: '[DEMO] General Secretary (Sports)', role: 'GENERAL_SECRETARY', hostel: 'Hostel C', admissionNo: '22ZZ0901' },
+  { email: 'events@sportsos.demo', name: '[DEMO] Event Committee', role: 'EVENT_COMMITTEE' },
+  { email: 'coach.football@sportsos.demo', name: '[DEMO] Football Coach', role: 'COACH' },
+  { email: 'coach.basketball@sportsos.demo', name: '[DEMO] Basketball Coach', role: 'COACH' },
+  { email: 'ground@sportsos.demo', name: '[DEMO] Ground Staff', role: 'GROUND_STAFF' },
+  { email: 'equipment@sportsos.demo', name: '[DEMO] Equipment Manager', role: 'EQUIPMENT_MANAGER' },
+  { email: 'security@sportsos.demo', name: '[DEMO] Security Staff', role: 'SECURITY_STAFF' },
+  { email: 'operations@sportsos.demo', name: '[DEMO] Operations Staff', role: 'OPERATIONS_STAFF' },
+  { email: 'council@sportsos.demo', name: '[DEMO] Sports Council', role: 'SPORTS_COUNCIL' },
+  { email: 'coord.cricket@sportsos.demo', name: '[DEMO] Cricket Coordinator', role: 'SPORT_COORDINATOR', hostel: 'Hostel E', admissionNo: '22ZZ0902' },
+  { email: 'hostelsec.a@sportsos.demo', name: '[DEMO] Hostel A Sports Secretary', role: 'HOSTEL_SECRETARY', hostel: 'Hostel A', admissionNo: '23ZZ0903' },
+  { email: 'media@sportsos.demo', name: '[DEMO] Tech, Media & Content Nominee', role: 'MEDIA_NOMINEE', hostel: 'Hostel B', admissionNo: '23ZZ0904' },
+  { email: 'club.member@sportsos.demo', name: '[DEMO] Club Member', role: 'CLUB_MEMBER', hostel: 'Hostel A', admissionNo: '22ZZ0143' },
+  { email: 'student@sportsos.demo', name: '[DEMO] Casual Student', role: 'STUDENT', hostel: 'Hostel D', admissionNo: '24ZZ0999' },
 ];
 
 // ~23.814 N, 86.441 E — placeholder positions spread across a few hundred metres
@@ -99,8 +114,8 @@ const FACILITIES = [
 ] as const;
 
 const CLUBS = [
-  { name: 'Football Club', sport: 'Football', coach: 'coach.football@iitism.ac.in', description: 'Institute football team and practice squad.' },
-  { name: 'Basketball Club', sport: 'Basketball', coach: 'coach.basketball@iitism.ac.in', description: 'Men’s and women’s basketball teams.' },
+  { name: 'Football Club', sport: 'Football', coach: 'coach.football@sportsos.demo', description: 'Institute football team and practice squad.' },
+  { name: 'Basketball Club', sport: 'Basketball', coach: 'coach.basketball@sportsos.demo', description: 'Men’s and women’s basketball teams.' },
   { name: 'Cricket Club', sport: 'Cricket', coach: null, description: 'Institute cricket squad; run by the cricket coordinator.' },
   { name: 'Badminton Club', sport: 'Badminton', coach: null, description: 'Singles and doubles practice ladder.' },
   { name: 'Athletics Club', sport: 'Athletics', coach: null, description: 'Track and field training group.' },
@@ -173,12 +188,33 @@ function jitter(lat: number, lon: number, maxM: number) {
   };
 }
 
+/** Refuses to wipe a database that holds anything other than demo data. */
+async function assertSafeToReset() {
+  const force = process.env.SEED_FORCE_RESET === 'true';
+  if (process.env.NODE_ENV === 'production' && process.env.SEED_ALLOW_PRODUCTION !== 'true') {
+    throw new Error('Refusing to seed demo data with NODE_ENV=production (set SEED_ALLOW_PRODUCTION=true and SEED_FORCE_RESET=true if you really mean it).');
+  }
+  const [realUsers, records, imports] = await Promise.all([
+    prisma.user.count({ where: { isDemo: false } }),
+    prisma.institutionalRecord.count(),
+    prisma.importBatch.count(),
+  ]);
+  if ((realUsers || records || imports) && !force) {
+    throw new Error(
+      `Refusing to reset: the database holds ${realUsers} non-demo user(s), ${records} institutional record(s) and ${imports} import(s). ` +
+        'The demo seed TRUNCATES every table. Re-run with SEED_FORCE_RESET=true only on a disposable database.',
+    );
+  }
+}
+
 async function main() {
-  console.log('Resetting database…');
+  await assertSafeToReset();
+  console.log('Resetting database (demo seed)…');
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE
-    "AuditLog", "Notification", "Achievement", "Complaint", "Match", "Team", "Tournament",
-    "EquipmentIssue", "Equipment", "AttendanceAttempt", "AttendanceRecord", "AttendanceSession",
-    "ClubMembership", "Booking", "Club", "Facility", "User" RESTART IDENTITY CASCADE`);
+    "AuditLog", "Notification", "Achievement", "ComplaintAttachment", "Complaint", "TeamMember", "Match", "Team", "Tournament",
+    "InventoryTransaction", "EquipmentRequest", "EquipmentIssue", "Equipment", "AttendanceCorrection", "AttendanceAttempt", "AttendanceRecord", "AttendanceSession",
+    "Announcement", "OperationalTask", "AiUsageLog", "ImportBatchItem", "ImportBatch", "InstitutionalRecord",
+    "ClubMembership", "Booking", "RoleAssignment", "Club", "Facility", "User" RESTART IDENTITY CASCADE`);
 
   const passwordHash = await bcrypt.hash('sportsos123', 10);
   const seedStart = at(-HISTORY_DAYS - 1, 480);
@@ -188,19 +224,15 @@ async function main() {
   for (const s of STAFF) {
     users.push({ id: randomUUID(), email: s.email, name: s.name, role: s.role, hostel: s.hostel ?? null, admissionNo: s.admissionNo ?? null });
   }
-  const usedNames = new Set<string>();
   for (let i = 0; i < 60; i++) {
-    let name: string;
-    do name = `${pick(FIRST)} ${pick(LAST)}`;
-    while (usedNames.has(name));
-    usedNames.add(name);
+    const name = `Demo Student ${String(i + 1).padStart(2, '0')}`;
     const year = pick(['22', '23', '24', '25']);
     const admissionNo = `${year}${pick(BRANCH)}${String(1000 + i * 7).padStart(4, '0')}`;
-    users.push({ id: randomUUID(), email: `${admissionNo.toLowerCase()}@iitism.ac.in`, name, role: 'STUDENT', hostel: pick(HOSTELS), admissionNo });
+    users.push({ id: randomUUID(), email: `${admissionNo.toLowerCase()}@sportsos.demo`, name, role: 'STUDENT', hostel: pick(HOSTELS), admissionNo });
   }
   const byEmail = (email: string) => users.find((u) => u.email === email)!;
-  const students = users.filter((u) => u.role === 'STUDENT' && u.email !== 'student@iitism.ac.in');
-  const anup = byEmail('22je0143@iitism.ac.in');
+  const students = users.filter((u) => u.role === 'STUDENT' && u.email !== 'student@sportsos.demo');
+  const anup = byEmail('club.member@sportsos.demo');
 
   // ---------------------------------------------------------------- facilities
   const facilities = FACILITIES.map(({ demand: _d, ...f }) => ({ id: randomUUID(), ...f, sports: [...f.sports] }));
@@ -234,15 +266,31 @@ async function main() {
     const m = memberships.find((x) => x.clubId === c.id && x.userId === captain);
     if (m) m.role = 'CAPTAIN';
   }
-  const coordinator = byEmail('coord.cricket@iitism.ac.in');
+  const coordinator = byEmail('coord.cricket@sportsos.demo');
   memberships.push({ clubId: club('Cricket Club').id, userId: coordinator.id, status: 'ACTIVE', role: 'VICE_CAPTAIN', joinedAt: at(-300, 600) });
 
-  await prisma.user.createMany({ data: users.map((u) => ({ ...u, passwordHash, createdAt: seedStart })) });
-  await prisma.facility.createMany({ data: facilities.map((f) => ({ ...f, type: f.type, createdAt: seedStart })) });
-  await prisma.club.createMany({ data: clubs });
+  await prisma.user.createMany({ data: users.map((u) => ({ ...u, passwordHash, isDemo: true, createdAt: seedStart })) });
+  await prisma.facility.createMany({ data: facilities.map((f) => ({ ...f, type: f.type, isDemo: true, createdAt: seedStart })) });
+  await prisma.club.createMany({ data: clubs.map((c) => ({ ...c, isDemo: true })) });
   await prisma.clubMembership.createMany({ data: memberships });
-  const peso = byEmail('peso@iitism.ac.in');
-  audit(byEmail('admin@iitism.ac.in').id, 'system.seed', 'System', 'seed', { users: users.length, facilities: facilities.length }, seedStart);
+
+  // role assignments: the display role becomes an explicit (scoped) assignment
+  const assignments: Prisma.RoleAssignmentCreateManyInput[] = users.map((u) => ({
+    userId: u.id,
+    role: u.role === 'CLUB_MEMBER' ? 'STUDENT' : u.role,
+    scopeType: u.role === 'HOSTEL_SECRETARY' ? 'HOSTEL' : u.role === 'SPORT_COORDINATOR' ? 'SPORT' : 'GLOBAL',
+    scopeId: u.role === 'HOSTEL_SECRETARY' ? (u.hostel ?? '') : u.role === 'SPORT_COORDINATOR' ? 'Cricket' : '',
+    reason: 'DEMO seed',
+    validFrom: seedStart,
+  }));
+  for (const m of memberships) {
+    if (m.status === 'ACTIVE') assignments.push({ userId: m.userId, role: 'CLUB_MEMBER', scopeType: 'CLUB', scopeId: m.clubId, reason: 'DEMO seed: active club membership', validFrom: seedStart });
+  }
+  // a multi-role example: the media nominee is also a temporary event-committee volunteer
+  assignments.push({ userId: byEmail('media@sportsos.demo').id, role: 'EVENT_COMMITTEE', reason: 'DEMO seed: temporary volunteer for the annual meet', validFrom: seedStart, validUntil: at(30, 0) });
+  await prisma.roleAssignment.createMany({ data: assignments });
+  const peso = byEmail('peso@sportsos.demo');
+  audit(byEmail('admin@sportsos.demo').id, 'system.seed', 'System', 'seed', { users: users.length, facilities: facilities.length }, seedStart);
 
   // ---------------------------------------------------------------- practice sessions, club bookings, attendance
   console.log('Generating attendance history…');
@@ -364,7 +412,7 @@ async function main() {
 
   // ---------------------------------------------------------------- equipment & loans
   console.log('Generating equipment ledger…');
-  const manager = byEmail('equipment@iitism.ac.in');
+  const manager = byEmail('equipment@sportsos.demo');
   const items = EQUIPMENT.map((e) => ({ id: randomUUID(), ...e, qrCode: randomUUID().replace(/-/g, ''), availableQty: e.totalQty, damagedQty: 0, total: e.totalQty }));
   for (const it of items) audit(manager.id, 'inventory.create', 'Equipment', it.id, { name: it.name, sport: it.sport, totalQty: it.totalQty }, seedStart);
   const issues: Prisma.EquipmentIssueCreateManyInput[] = [];
@@ -430,21 +478,28 @@ async function main() {
     it.damagedQty += writeOff;
     audit(manager.id, 'inventory.damage', 'Equipment', it.id, { quantity: writeOff, note: 'Worn out — moved to damaged stock' }, at(-2, 1080));
   }
-  await prisma.equipment.createMany({ data: items.map(({ total: _t, ...it }) => ({ ...it, createdAt: seedStart })) });
+  await prisma.equipment.createMany({ data: items.map(({ total: _t, ...it }) => ({ ...it, isDemo: true, createdAt: seedStart })) });
   await prisma.equipmentIssue.createMany({ data: issues });
+  // stock ledger: one opening balance per item matching the generated quantities
+  await prisma.inventoryTransaction.createMany({
+    data: items.map((it) => ({
+      equipmentId: it.id, type: 'INITIAL' as const, quantity: it.totalQty, availableDelta: it.availableQty, damagedDelta: it.damagedQty, totalDelta: it.totalQty,
+      balanceAvailable: it.availableQty, balanceDamaged: it.damagedQty, balanceTotal: it.totalQty, actorId: manager.id, note: 'DEMO opening balance', createdAt: seedStart,
+    })),
+  });
 
   // ---------------------------------------------------------------- tournaments
   console.log('Generating tournaments…');
-  const eventsDesk = byEmail('events@iitism.ac.in');
-  const fbHostels = ['Jasper', 'Amber', 'Diamond', 'Sapphire', 'Topaz', 'Emerald'];
+  const eventsDesk = byEmail('events@sportsos.demo');
+  const fbHostels = ['Hostel A', 'Hostel B', 'Hostel C', 'Hostel D', 'Hostel E', 'Hostel G'];
   const cup = { id: randomUUID(), name: 'Inter-Hostel Football Cup 2026', sport: 'Football', format: 'SINGLE_ELIMINATION' as const, status: 'ONGOING' as const, description: 'Knock-out cup between hostel teams. Top two seeds receive byes.', startDate: at(-6, 990), facilityId: facility('FB-1').id, organizerId: eventsDesk.id, createdAt: at(-20, 600) };
   const cupTeams = fbHostels.map((h, i) => ({ id: randomUUID(), tournamentId: cup.id, name: `${h} FC`, hostel: h, seed: i + 1 }));
-  const bbHostels = ['Ruby', 'Opal', 'Jasper', 'Diamond', 'Topaz'];
+  const bbHostels = ['Hostel F', 'Hostel H', 'Hostel A', 'Hostel C', 'Hostel E'];
   const league = { id: randomUUID(), name: 'Inter-Hostel Basketball League 2026', sport: 'Basketball', format: 'ROUND_ROBIN' as const, status: 'ONGOING' as const, description: 'Every hostel plays every other once; 3 points for a win.', startDate: at(-12, 1080), facilityId: facility('BB-B').id, organizerId: eventsDesk.id, createdAt: at(-25, 600) };
   const leagueTeams = bbHostels.map((h) => ({ id: randomUUID(), tournamentId: league.id, name: `${h} Ballers`, hostel: h, seed: null }));
   const open = { id: randomUUID(), name: "Freshers' Badminton Open", sport: 'Badminton', format: 'SINGLE_ELIMINATION' as const, status: 'DRAFT' as const, description: 'Singles knock-out for first-year students. Registrations open.', startDate: at(9, 1080), facilityId: facility('BD-1').id, organizerId: eventsDesk.id, createdAt: at(-3, 600) };
-  const openTeams = ['Kavya Nair', 'Arjun Das', 'Isha Ghosh', 'Pranav Jha'].map((n) => ({ id: randomUUID(), tournamentId: open.id, name: n, hostel: null, seed: null }));
-  await prisma.tournament.createMany({ data: [cup, league, open] });
+  const openTeams = ['Demo Player A', 'Demo Player B', 'Demo Player C', 'Demo Player D'].map((n) => ({ id: randomUUID(), tournamentId: open.id, name: n, hostel: null, seed: null }));
+  await prisma.tournament.createMany({ data: [cup, league, open].map((t) => ({ ...t, isDemo: true })) });
   await prisma.team.createMany({ data: [...cupTeams, ...leagueTeams, ...openTeams] });
 
   // knock-out: round 1 played, first semi played, second semi and final upcoming
@@ -489,8 +544,8 @@ async function main() {
   await prisma.match.createMany({ data: rrRows });
 
   // ---------------------------------------------------------------- complaints, achievements, notifications
-  const ops = byEmail('operations@iitism.ac.in');
-  const ground = byEmail('ground@iitism.ac.in');
+  const ops = byEmail('operations@sportsos.demo');
+  const ground = byEmail('ground@sportsos.demo');
   await prisma.complaint.createMany({
     data: [
       { raisedById: anup.id, category: 'FACILITY', subject: 'Floodlight flickering on Basketball Court A', description: 'Two of the four floodlights on Court A flicker after 7 pm, making evening games hard.', facilityId: facility('BB-A').id, status: 'IN_PROGRESS', priority: 'HIGH', assignedToId: ground.id, createdAt: at(-3, 1200) },
@@ -502,7 +557,7 @@ async function main() {
   });
   await prisma.achievement.createMany({
     data: [
-      { userId: anup.id, title: 'Inter-Hostel Football Cup — Runners-up', sport: 'Football', level: 'HOSTEL', position: '2nd', date: at(-120, 600), verifiedById: byEmail('coach.football@iitism.ac.in').id },
+      { userId: anup.id, title: 'Inter-Hostel Football Cup — Runners-up', sport: 'Football', level: 'HOSTEL', position: '2nd', date: at(-120, 600), verifiedById: byEmail('coach.football@sportsos.demo').id },
       { userId: anup.id, title: 'Institute Basketball Trials — Selected', sport: 'Basketball', level: 'INSTITUTE', position: 'Squad', date: at(-40, 600), verifiedById: null },
       { userId: students[0].id, title: 'Inter-IIT Sports Meet — Athletics 4×100 m relay', sport: 'Athletics', level: 'INTER_IIT', position: 'Bronze', date: at(-300, 600), verifiedById: peso.id },
       { userId: students[1].id, title: 'State Badminton Championship — Quarter-finalist', sport: 'Badminton', level: 'STATE', position: 'QF', date: at(-90, 600), verifiedById: null },
@@ -513,7 +568,7 @@ async function main() {
   await prisma.notification.createMany({
     data: [
       ...welcome,
-      { userId: anup.id, title: 'Fixtures out: Inter-Hostel Football Cup 2026', body: 'Jasper FC play the semi-final this week.', type: 'INFO', link: `/events/${cup.id}`, createdAt: at(-6, 600) },
+      { userId: anup.id, title: 'Fixtures out: Inter-Hostel Football Cup 2026', body: 'Hostel A FC play the semi-final this week.', type: 'INFO', link: `/events/${cup.id}`, createdAt: at(-6, 600) },
       { userId: peso.id, title: 'Low stock: Shuttlecock tube (feather)', body: `${items[7].availableQty} left in store (reorder level ${items[7].minStock}).`, type: 'ALERT', link: '/inventory', createdAt: at(-2, 1085) },
       { userId: manager.id, title: 'Low stock: Cricket ball (leather)', body: `${items[3].availableQty} left in store (reorder level ${items[3].minStock}).`, type: 'ALERT', link: '/inventory', createdAt: at(-2, 1085) },
     ],
@@ -528,7 +583,7 @@ async function main() {
   console.log(
     `Seeded ${users.length} users, ${facilities.length} facilities, ${clubs.length} clubs, ${bookings.length} bookings, ` +
       `${sessions.length} attendance sessions (${records.length} check-ins), ${issues.length} equipment loans, ` +
-      `3 tournaments, ${auditRows.length} audit entries. Password for all accounts: sportsos123`,
+      `3 tournaments, ${auditRows.length} audit entries. Password for all DEMO accounts: sportsos123`,
   );
 }
 

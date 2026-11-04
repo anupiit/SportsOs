@@ -1,4 +1,4 @@
-import { IsDateString, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength, NotEquals } from 'class-validator';
 
 export class CreateItemDto {
   @IsString() @MinLength(2) @MaxLength(80) name: string;
@@ -36,4 +36,36 @@ export class ReturnDto {
   @IsInt() @Min(0) @Max(100) returnedQty: number;
   @IsOptional() @IsInt() @Min(0) @Max(100) damagedQty?: number;
   @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+export class StockMovementDto {
+  @IsInt() @Min(1) @Max(10_000) quantity: number;
+  @IsString() @MinLength(3) @MaxLength(300) note: string;
+}
+
+export class WriteOffDto extends StockMovementDto {
+  @IsIn(['AVAILABLE', 'DAMAGED']) from: 'AVAILABLE' | 'DAMAGED';
+}
+
+export class AdjustDto {
+  /** physical-count correction of the store quantity (positive or negative) */
+  @IsInt() @Min(-10_000) @Max(10_000) @NotEquals(0) availableDelta: number;
+  @IsString() @MinLength(5) @MaxLength(300) note: string;
+}
+
+export class CreateRequestDto {
+  @IsOptional() @IsString() equipmentId?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) itemName?: string;
+  @IsInt() @Min(1) @Max(500) quantity: number;
+  @IsOptional() @IsString() clubId?: string;
+  @IsOptional() @IsDateString() neededBy?: string;
+  @IsString() @MinLength(5) @MaxLength(500) reason: string;
+}
+
+export class DecideRequestDto {
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+}
+
+export class FulfilRequestDto {
+  @IsOptional() @IsDateString() dueAt?: string;
 }

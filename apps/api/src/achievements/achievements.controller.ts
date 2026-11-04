@@ -29,7 +29,7 @@ export class AchievementsController {
 
   @Post(':id/verify')
   @HttpCode(200)
-  @RequirePermission('achievements:verify')
+  @RequirePermission('achievement.verify')
   verify(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.achievements.verify(user, id);
   }

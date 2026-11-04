@@ -76,6 +76,50 @@ export class AnalyticsService {
   }
 
   /** Weekly check-ins, distinct participants and bookings, weeks starting Monday (IST). */
+  /** Complaint volume and resolution times (hours from creation to resolution). */
+  async complaints(days: number) {
+    const from = addDays(new Date(), -days);
+    const rows = await this.prisma.complaint.findMany({
+      where: { createdAt: { gte: from } },
+      select: { category: true, status: true, priority: true, createdAt: true, resolvedAt: true, escalated: true, reopenCount: true },
+    });
+    const resolved = rows.filter((r) => r.resolvedAt);
+    const hours = resolved.map((r) => (r.resolvedAt!.getTime() - r.createdAt.getTime()) / HOUR).sort((a, b) => a - b);
+    const byCategory = new Map<string, { total: number; open: number; resolved: number }>();
+    for (const r of rows) {
+      const c = byCategory.get(r.category) ?? { total: 0, open: 0, resolved: 0 };
+      c.total++;
+      if (r.status === 'OPEN' || r.status === 'IN_PROGRESS') c.open++;
+      if (r.resolvedAt) c.resolved++;
+      byCategory.set(r.category, c);
+    }
+    return {
+      days,
+      total: rows.length,
+      open: rows.filter((r) => r.status === 'OPEN' || r.status === 'IN_PROGRESS').length,
+      resolved: resolved.length,
+      escalated: rows.filter((r) => r.escalated).length,
+      reopened: rows.filter((r) => r.reopenCount > 0).length,
+      medianResolutionHours: hours.length ? round2(hours[Math.floor(hours.length / 2)]) : null,
+      byCategory: [...byCategory].map(([category, v]) => ({ category, ...v })),
+    };
+  }
+
+  /** Daily booking counts by outcome over the window (IST days). */
+  async bookingTrends(days: number) {
+    const from = addDays(istMidnight(todayIst()), -(days - 1));
+    const rows = await this.prisma.booking.findMany({ where: { createdAt: { gte: from } }, select: { createdAt: true, status: true, type: true } });
+    const buckets = new Map<string, Record<string, number>>();
+    for (let i = 0; i < days; i++) buckets.set(istDateString(addDays(from, i)), { total: 0, APPROVED: 0, PENDING: 0, REJECTED: 0, CANCELLED: 0, COMPLETED: 0 });
+    for (const r of rows) {
+      const b = buckets.get(istDateString(r.createdAt));
+      if (!b) continue;
+      b.total++;
+      b[r.status] = (b[r.status] ?? 0) + 1;
+    }
+    return [...buckets].map(([date, v]) => ({ date, ...v }));
+  }
+
   async participation(weeks: number): Promise<ParticipationPoint[]> {
     const thisMonday = addDays(istMidnight(todayIst()), -istWeekday(new Date()));
     const from = addDays(thisMonday, -7 * (weeks - 1));

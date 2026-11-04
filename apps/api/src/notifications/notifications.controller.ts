@@ -37,7 +37,7 @@ export class NotificationsController {
   }
 
   @Post('broadcast')
-  @RequirePermission('notifications:broadcast')
+  @RequirePermission('notification.broadcast')
   async broadcast(@CurrentUser() user: AuthUser, @Body() dto: BroadcastDto) {
     const sent = await this.notifications.notifyRoles(dto.roles ?? [], {
       title: dto.title,

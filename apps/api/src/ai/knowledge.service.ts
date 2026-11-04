@@ -80,6 +80,8 @@ export class KnowledgeService {
     });
 
     const tournaments = await this.prisma.tournament.findMany({
+      // proposals are visible only to their organiser and reviewers, so they never enter the shared index
+      where: { status: { in: ['DRAFT', 'ONGOING', 'COMPLETED'] } },
       orderBy: { startDate: 'desc' },
       take: 10,
       include: { teams: true, matches: { where: { status: 'COMPLETED' }, include: { homeTeam: true, awayTeam: true }, orderBy: { scheduledAt: 'desc' }, take: 6 } },

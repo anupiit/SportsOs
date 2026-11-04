@@ -1,15 +1,17 @@
 import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { ROLE_PERMISSIONS } from '@sportsos/shared';
 import * as bcrypt from 'bcryptjs';
-import type { JwtPayload } from '../common/auth-user';
+import type { AuthUser, JwtPayload } from '../common/auth-user';
 import { userFull } from '../common/selects';
 import { PrismaService } from '../prisma/prisma.service';
+import { RbacService } from '../rbac/rbac.service';
 import { LoginDto, RegisterDto } from './auth.dto';
 
 /** Compared against when the email is unknown, so response time doesn't reveal which accounts exist. */
-const DUMMY_HASH = bcrypt.hashSync('sportsos-timing-equaliser', 10);
+export const BCRYPT_ROUNDS = 12;
+
+const DUMMY_HASH = bcrypt.hashSync('sportsos-timing-equaliser', BCRYPT_ROUNDS);
 
 @Injectable()
 export class AuthService {
@@ -17,6 +19,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly rbac: RbacService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -42,6 +45,8 @@ export class AuthService {
       select: { id: true },
     });
     if (clash) throw new ConflictException('An account with this email or admission number already exists');
+    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+    // self-registration only ever yields the casual-student role; anything else is assigned by an administrator
     const user = await this.prisma.user.create({
       data: {
         name: dto.name.trim(),
@@ -50,20 +55,28 @@ export class AuthService {
         hostel: dto.hostel,
         phone: dto.phone,
         role: 'STUDENT',
-        passwordHash: await bcrypt.hash(dto.password, 10),
+        passwordHash,
+        roleAssignments: { create: { role: 'STUDENT', reason: 'Self-registration' } },
       },
     });
     return this.issue(user.id);
   }
 
-  async me(userId: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: userFull });
-    return { user, permissions: ROLE_PERMISSIONS[user.role] };
+  /** Session view: the user, the roles they hold, and the permissions in effect for the active role. */
+  async me(principal: AuthUser) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: principal.id }, select: userFull });
+    return {
+      user,
+      permissions: principal.permissions,
+      activeRole: principal.activeRole,
+      heldRoles: principal.heldRoles,
+      roles: principal.grants.map((g) => ({ assignmentId: g.assignmentId, role: g.role, scopeType: g.scopeType, scopeId: g.scopeId, validUntil: g.validUntil?.toISOString() ?? null })),
+    };
   }
 
   private async issue(userId: string) {
-    const { user, permissions } = await this.me(userId);
-    const payload: JwtPayload = { sub: user.id, role: user.role };
-    return { accessToken: await this.jwt.signAsync(payload), user, permissions };
+    const principal = await this.rbac.loadAuthUser(userId);
+    const payload: JwtPayload = { sub: principal.id, role: principal.role };
+    return { accessToken: await this.jwt.signAsync(payload), ...(await this.me(principal)) };
   }
 }

@@ -3,7 +3,8 @@ import type { Request, Response } from 'express';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
-import { RequirePermission } from '../common/decorators';
+import type { AuthUser } from '../common/auth-user';
+import { CurrentUser, RequirePermission } from '../common/decorators';
 import { AiService } from './ai.service';
 
 class TurnDto {
@@ -25,21 +26,24 @@ export class AiController {
   constructor(private readonly ai: AiService) {}
 
   @Get('status')
+  @RequirePermission('ai.use')
   status() {
     return this.ai.status();
   }
 
   @Post('ask')
   @HttpCode(200)
+  @RequirePermission('ai.use')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
-  ask(@Body() dto: AskDto) {
-    return this.ai.ask(dto);
+  ask(@CurrentUser() user: AuthUser, @Body() dto: AskDto) {
+    return this.ai.ask(dto, user);
   }
 
   /** Server-sent events: sources → delta* → done (see docs/API.md). */
   @Post('ask/stream')
+  @RequirePermission('ai.use')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
-  async askStream(@Body() dto: AskDto, @Req() req: Request, @Res() res: Response) {
+  async askStream(@CurrentUser() user: AuthUser, @Body() dto: AskDto, @Req() req: Request, @Res() res: Response) {
     res.status(200);
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -49,7 +53,7 @@ export class AiController {
     const abort = new AbortController();
     req.on('close', () => abort.abort());
     try {
-      for await (const event of this.ai.askStream(dto, abort.signal)) {
+      for await (const event of this.ai.askStream(dto, user, abort.signal)) {
         if (abort.signal.aborted) break;
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
@@ -61,15 +65,21 @@ export class AiController {
 
   @Post('report')
   @HttpCode(200)
-  @RequirePermission('ai:report')
+  @RequirePermission('ai.report')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  report(@Body() dto: ReportDto) {
-    return this.ai.report(dto.period);
+  report(@CurrentUser() user: AuthUser, @Body() dto: ReportDto) {
+    return this.ai.report(dto.period, user.id);
+  }
+
+  @Get('usage')
+  @RequirePermission('ai.manage')
+  usage() {
+    return this.ai.usage(30);
   }
 
   @Post('reindex')
   @HttpCode(200)
-  @RequirePermission('ai:report')
+  @RequirePermission('ai.manage')
   async reindex() {
     return { indexed: await this.ai.reindex() };
   }
