@@ -1,3 +1,7 @@
+> **Superseded (2026-11-04).** This document predates the current code and contains inaccurate claims (framework versions,
+> model counts, components that do not exist). See [SPORTSOS_IMPLEMENTATION_AUDIT.md](SPORTSOS_IMPLEMENTATION_AUDIT.md) for the verified baseline
+> and [IMPLEMENTATION_CHANGELOG.md](IMPLEMENTATION_CHANGELOG.md) for what changed.
+
 # SportsOS — Comprehensive Technical Audit & Forensic Architecture Report
 
 **Project:** SportsOS (AI-Powered Sports ERP for IIT (ISM) Dhanbad)  

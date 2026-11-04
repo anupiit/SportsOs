@@ -2,7 +2,7 @@
   "name": "sportsos",
   "version": "0.1.0",
   "private": true,
-  "description": "SportsOS — AI-powered Sports ERP for IIT (ISM) Dhanbad",
+  "description": "SportsOS \u2014 AI-powered Sports ERP for IIT (ISM) Dhanbad",
   "workspaces": [
     "packages/shared",
     "apps/api",
@@ -17,7 +17,11 @@
     "dev:web": "npm run dev -w @sportsos/web",
     "build": "npm run build:shared && npm run build -w @sportsos/api && npm run build -w @sportsos/web",
     "test": "npm run build:shared && npm test -w @sportsos/api",
-    "postinstall": "npm run build:shared"
+    "postinstall": "npm run build:shared",
+    "lint": "npm run lint -w @sportsos/api && npm run lint -w @sportsos/web",
+    "typecheck": "npm run build:shared && tsc --noEmit -p apps/api/tsconfig.json && npm run typecheck -w @sportsos/web",
+    "test:smoke": "npm run test:smoke -w @sportsos/api",
+    "test:e2e": "npm run test:e2e -w @sportsos/api"
   },
   "engines": {
     "node": ">=20"

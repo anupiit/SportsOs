@@ -3,7 +3,7 @@ import { RequirePermission } from '../common/decorators';
 import { AuditService } from './audit.service';
 
 @Controller('audit')
-@RequirePermission('audit:read')
+@RequirePermission('audit.view')
 export class AuditController {
   constructor(private readonly audit: AuditService) {}
 

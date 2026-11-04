@@ -22,12 +22,12 @@ import {
   ShieldCheck,
   Sparkles,
   Trophy,
-  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useAuth, useUser } from '@/components/auth';
 import { ApprovalQueue, PassModal } from '@/components/bookings';
+import { WorkQueue } from '@/components/role-dashboard';
 import { BookingStatusBadge, FacilityStatusBadge, SessionBadge } from '@/components/status';
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorState, Skeleton, SkeletonRows, StatTile } from '@/components/ui';
 import { fmtDateTime, fmtNumber, fmtRelative, fmtTime, fmtTimeRange, fmtWeekday, minutesToHHMM } from '@/lib/format';
@@ -220,7 +220,7 @@ function ActiveSessions() {
   return (
     <Card>
       <CardHeader
-        title={can('attendance:manage') ? 'My live sessions' : 'Sessions open for check-in'}
+        title={can('attendance.manage') ? 'My live sessions' : 'Sessions open for check-in'}
         description="OTP + GPS verified attendance"
         icon={<ShieldCheck className="size-4" />}
         actions={
@@ -250,7 +250,7 @@ function ActiveSessions() {
                 <SessionBadge status={s.status} />
                 <Link href={`/attendance?session=${s.id}`}>
                   <Button size="sm" variant="secondary">
-                    {can('attendance:manage') ? 'Open' : 'Check in'}
+                    {can('attendance.manage') ? 'Open' : 'Check in'}
                   </Button>
                 </Link>
               </li>
@@ -346,12 +346,14 @@ function RecentNotifications() {
 }
 
 function QuickActions({ narrow }: { narrow?: boolean }) {
+  const { can } = useAuth();
+  // only actions the current role can actually perform
   const actions = [
-    { href: '/facilities', label: 'Book a facility', icon: CalendarPlus },
-    { href: '/attendance', label: 'Mark attendance', icon: ShieldCheck },
-    { href: '/complaints', label: 'Raise a complaint', icon: MessageSquareWarning },
-    { href: '/assistant', label: 'Ask SportsOS AI', icon: Sparkles },
-  ];
+    { href: '/facilities', label: 'Book a facility', icon: CalendarPlus, ok: can('booking.create') },
+    { href: '/attendance', label: can('attendance.manage') ? 'Run attendance' : 'Mark attendance', icon: ShieldCheck, ok: can('attendance.mark') || can('attendance.manage') },
+    { href: '/complaints', label: 'Raise a complaint', icon: MessageSquareWarning, ok: can('complaint.create') },
+    { href: '/assistant', label: 'Ask SportsOS AI', icon: Sparkles, ok: can('ai.use') },
+  ].filter((a) => a.ok);
   return (
     <div className={narrow ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-2 sm:grid-cols-4'}>
       {actions.map(({ href, label, icon: Icon }) => (
@@ -372,16 +374,20 @@ function QuickActions({ narrow }: { narrow?: boolean }) {
 
 export default function DashboardPage() {
   const user = useUser();
-  const { can } = useAuth();
+  const { can, activeRole, heldRoles } = useAuth();
   // personal accounts get a first name; office accounts ("Sports Officer (PESO)") keep their full title
-  const firstName = user.admissionNo ? user.name.split(' ')[0] : user.name;
-  const isExecutive = can('analytics:read');
+  const plainName = user.name.replace(/^\[DEMO\]\s*/, '');
+  const firstName = user.admissionNo && !user.isDemo ? plainName.split(' ')[0] : plainName;
+  const isExecutive = can('analytics.view');
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-wider text-accent-ink uppercase">{roleLabel(user.role)}</p>
+          <p className="text-xs font-semibold tracking-wider text-accent-ink uppercase">
+            {activeRole ? roleLabel(activeRole) : heldRoles.map(roleLabel).join(' · ') || roleLabel(user.role)}
+            {user.isDemo && <span className="ml-2 rounded bg-warn-soft px-1.5 py-0.5 text-[10px] text-warn-ink">DEMO DATA</span>}
+          </p>
           <h1 className="text-2xl font-bold tracking-tight text-text">
             {greeting()}, {firstName}
           </h1>
@@ -391,9 +397,11 @@ export default function DashboardPage() {
 
       {isExecutive ? <KpiRow /> : <QuickActions />}
 
+      <WorkQueue />
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
-          {can('bookings:approve') && (
+          {can('booking.approve') && (
             <Card>
               <CardHeader
                 title="Pending approvals"
@@ -415,7 +423,7 @@ export default function DashboardPage() {
         </div>
         <div className="space-y-6">
           <ActiveSessions />
-          {can('inventory:issue') && <InventoryAlertCard />}
+          {(can('inventory.issue') || can('inventory.audit')) && <InventoryAlertCard />}
           <RecentNotifications />
           {isExecutive && <QuickActions narrow />}
         </div>

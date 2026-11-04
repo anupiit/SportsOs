@@ -7,6 +7,10 @@ import type {
   Priority,
 } from '@sportsos/shared';
 
+/**
+ * Hostel names used only as input suggestions. UNVERIFIED: this list predates the
+ * institutional-data pipeline; replace it with hostels imported from an authorised source.
+ */
 export const HOSTELS = [
   'Amber',
   'Aquamarine',
@@ -58,6 +62,8 @@ export const COMPLAINT_CATEGORY_LABEL: Record<ComplaintCategory, string> = {
   EQUIPMENT: 'Equipment',
   STAFF: 'Staff',
   BOOKING: 'Booking',
+  SECURITY: 'Security incident',
+  MAINTENANCE: 'Maintenance',
   OTHER: 'Other',
 };
 

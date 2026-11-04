@@ -1,11 +1,34 @@
 import { Logger } from '@nestjs/common';
 import { Pinecone } from '@pinecone-database/pinecone';
+import type { Permission } from '@sportsos/shared';
 
 export interface KnowledgeDoc {
   id: string;
   title: string;
   kind: string;
   text: string;
+}
+
+/**
+ * Permissions (any one of) needed to receive a document as AI context. Mirrors
+ * the guards on the equivalent REST endpoints, keyed by document id so it holds
+ * for every vector store. Unknown ids are denied to everyone without analytics.view.
+ */
+export function requirementFor(id: string): Permission[] {
+  if (id === 'policies') return [];
+  if (id.startsWith('facility-') && id !== 'facility-utilization') return ['facility.view'];
+  if (id.startsWith('equipment-') && id !== 'equipment-wear') return ['inventory.view'];
+  if (id === 'clubs') return ['club.view'];
+  if (id.startsWith('tournament-')) return ['event.view'];
+  if (id === 'participation-trend') return ['analytics.view', 'analytics.participation'];
+  if (id === 'equipment-wear') return ['analytics.view', 'inventory.audit'];
+  if (id === 'complaints') return ['analytics.view', 'complaint.view_all'];
+  return ['analytics.view'];
+}
+
+export function mayRead(permissions: readonly string[], id: string): boolean {
+  const req = requirementFor(id);
+  return req.length === 0 || req.some((p) => permissions.includes(p));
 }
 
 export interface SearchHit extends KnowledgeDoc {

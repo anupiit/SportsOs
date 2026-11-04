@@ -181,7 +181,7 @@ export function ProfileView({ userId, self }: { userId: string; self: boolean })
     );
 
   const { user, stats, achievements, clubs } = data;
-  const canVerify = can('achievements:verify') && !self;
+  const canVerify = can('achievement.verify') && !self;
 
   return (
     <div className="space-y-6">

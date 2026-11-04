@@ -28,3 +28,19 @@ export class UpdateMatchDto {
   @IsOptional() @IsDateString() scheduledAt?: string;
   @IsOptional() @IsString() facilityId?: string;
 }
+
+export class UpdateTournamentDto {
+  @IsOptional() @IsString() @MinLength(3) @MaxLength(120) name?: string;
+  @IsOptional() @IsDateString() startDate?: string;
+  @IsOptional() @IsString() @MaxLength(1000) description?: string;
+  @IsOptional() @IsString() facilityId?: string;
+}
+
+export class ReviewDto {
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+export class AddMemberDto {
+  /** user id, email or admission number */
+  @IsString() @MinLength(3) @MaxLength(120) student: string;
+}

@@ -117,6 +117,7 @@ export function humanize(value: string): string {
 
 export function initials(name: string): string {
   return name
+    .replace(/^\[[A-Z]+\]\s*/, '') // "[DEMO] …" label
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)

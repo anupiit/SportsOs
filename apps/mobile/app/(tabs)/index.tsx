@@ -32,7 +32,7 @@ export default function HomeScreen() {
   const [data, setData] = useState<HomeData | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const showKpis = can('analytics:read');
+  const showKpis = can('analytics.view');
 
   const load = useCallback(async () => {
     // Load independently so one failing section doesn't blank the whole screen.
@@ -80,7 +80,7 @@ export default function HomeScreen() {
   if (!user) return null;
   if (!data) return <Loading />;
 
-  const isManager = can('attendance:manage');
+  const isManager = can('attendance.manage');
 
   return (
     <Screen refreshing={refreshing} onRefresh={onRefresh}>

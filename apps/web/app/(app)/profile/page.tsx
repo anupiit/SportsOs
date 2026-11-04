@@ -27,7 +27,7 @@ export default function MyProfilePage() {
   return (
     <div className="space-y-6">
       <ProfileView userId={user.id} self />
-      {can('achievements:verify') && <PendingVerification />}
+      {can('achievement.verify') && <PendingVerification />}
     </div>
   );
 }

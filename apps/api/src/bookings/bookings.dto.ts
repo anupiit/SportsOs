@@ -18,3 +18,13 @@ export class RejectBookingDto {
 export class CheckInBookingDto {
   @IsString() @MinLength(10) @MaxLength(200) token: string;
 }
+
+export class RescheduleBookingDto {
+  @IsDateString() start: string;
+  @IsDateString() end: string;
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+}
+
+export class CancelBookingDto {
+  @IsOptional() @IsString() @MinLength(3) @MaxLength(300) reason?: string;
+}

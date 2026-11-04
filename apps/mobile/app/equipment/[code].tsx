@@ -51,7 +51,7 @@ function endOfDayIn(days: number): Date {
 export default function EquipmentScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const { user, can } = useAuth();
-  const canIssue = can('inventory:issue');
+  const canIssue = can('inventory.issue');
 
   const lookup = useApi<EquipmentItem>(code ? `/inventory/items/by-qr/${encodeURIComponent(code)}` : null);
   const detail = useApi<ItemDetail>(lookup.data ? `/inventory/items/${lookup.data.id}` : null);
@@ -230,7 +230,7 @@ function IssueForm({ item, onIssued }: { item: EquipmentItem; onIssued: () => Pr
             label="Borrower"
             value={borrower}
             onChangeText={setBorrower}
-            placeholder="22je0143 or name@iitism.ac.in"
+            placeholder="Institute email or admission no."
             autoCapitalize="none"
             autoCorrect={false}
           />

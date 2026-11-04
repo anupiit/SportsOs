@@ -1,6 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AttemptOutcome, Prisma } from '@prisma/client';
-import { hasPermission } from '@sportsos/shared';
 import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../common/auth-user';
 import { evaluateGeofence } from '../common/geo';
@@ -9,7 +8,8 @@ import { QR_PREFIX, qrDataUrl } from '../common/qr';
 import { userSummary } from '../common/selects';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CheckInDto, CreateSessionDto } from './attendance.dto';
+import { can, canIn, permissionScope } from '../rbac/access';
+import { CheckInDto, CorrectionDto, CreateSessionDto } from './attendance.dto';
 
 const MAX_SESSION_HOURS = 6;
 /** Wrong-OTP attempts allowed per student per session in a 10-minute window (brute-force guard). */
@@ -54,8 +54,8 @@ export class AttendanceService {
     if (dto.clubId) {
       const club = await this.prisma.club.findUnique({ where: { id: dto.clubId } });
       if (!club) throw new NotFoundException('Club not found');
-      if (club.coachId !== actor.id && !hasPermission(actor.role, 'clubs:manage') && actor.role !== 'SPORT_COORDINATOR') {
-        throw new ForbiddenException('Only the club’s coach can open a session for it');
+      if (!canIn(actor, 'attendance.manage', { clubId: club.id, sport: club.sport })) {
+        throw new ForbiddenException('Only the club’s coach, its sport coordinator or the Sports Officer can open a session for it');
       }
     }
     return this.prisma.$transaction(async (tx) => {
@@ -82,8 +82,8 @@ export class AttendanceService {
       : { OR: [{ status: 'CLOSED' }, { endsAt: { lte: now } }] };
 
     let where: Prisma.AttendanceSessionWhereInput;
-    if (hasPermission(user.role, 'attendance:manage')) {
-      where = user.role === 'SPORTS_OFFICER' ? timeFilter : { AND: [timeFilter, { createdById: user.id }] };
+    if (can(user, 'attendance.manage') || can(user, 'attendance.view_team')) {
+      where = { AND: [timeFilter, this.teamScope(user)] };
     } else {
       const clubs = await this.prisma.clubMembership.findMany({ where: { userId: user.id, status: 'ACTIVE' }, select: { clubId: true } });
       where = { AND: [timeFilter, { OR: [{ clubId: null }, { clubId: { in: clubs.map((c) => c.clubId) } }] }] };
@@ -95,7 +95,7 @@ export class AttendanceService {
   async get(user: AuthUser, id: string) {
     const session = await this.prisma.attendanceSession.findUnique({ where: { id }, include: sessionInclude });
     if (!session) throw new NotFoundException('Session not found');
-    const manager = session.createdById === user.id || hasPermission(user.role, 'attendance:manage');
+    const manager = await this.canViewTeam(user, session);
     const records = await this.prisma.attendanceRecord.findMany({
       where: { sessionId: id, ...(manager ? {} : { userId: user.id }) },
       include: { user: { select: userSummary } },
@@ -107,7 +107,7 @@ export class AttendanceService {
   async otp(user: AuthUser, id: string) {
     const session = await this.prisma.attendanceSession.findUnique({ where: { id }, omit: { secret: false } });
     if (!session) throw new NotFoundException('Session not found');
-    this.assertManager(user, session.createdById);
+    await this.assertCanManage(user, session);
     if (!isOpen(session)) throw new ConflictException('Session is closed');
     const { code, step, expiresInSec } = currentOtp(session.secret, session.otpStepSeconds);
     return { sessionId: id, code, step, expiresInSec, qrDataUrl: await qrDataUrl(QR_PREFIX.checkin + id) };
@@ -116,7 +116,7 @@ export class AttendanceService {
   async close(user: AuthUser, id: string) {
     const session = await this.prisma.attendanceSession.findUnique({ where: { id } });
     if (!session) throw new NotFoundException('Session not found');
-    this.assertManager(user, session.createdById);
+    await this.assertCanManage(user, session);
     return this.prisma.$transaction(async (tx) => {
       const closed = await tx.attendanceSession.update({ where: { id }, data: { status: 'CLOSED', endsAt: session.endsAt < new Date() ? session.endsAt : new Date() }, include: sessionInclude });
       await this.audit.append(tx, { actorId: user.id, action: 'attendance.session.close', entity: 'AttendanceSession', entityId: id, payload: { attendees: closed._count.records } });
@@ -218,6 +218,123 @@ export class AttendanceService {
     }
   }
 
+  /**
+   * Manual correction: add a student who could not check in (e.g. phone failure) or
+   * remove a wrong record. Always needs a reason; the record is marked MANUAL and
+   * carries no coordinates. Every correction is kept in AttendanceCorrection and the audit ledger.
+   */
+  async correct(actor: AuthUser, sessionId: string, dto: CorrectionDto) {
+    const session = await this.prisma.attendanceSession.findUnique({ where: { id: sessionId }, include: { club: true } });
+    if (!session) throw new NotFoundException('Session not found');
+    await this.assertCanManage(actor, session);
+    const key = dto.student.trim();
+    const target = await this.prisma.user.findFirst({
+      where: { OR: [{ id: key }, { email: { equals: key, mode: 'insensitive' } }, { admissionNo: { equals: key, mode: 'insensitive' } }] },
+      select: { id: true, name: true },
+    });
+    if (!target) throw new NotFoundException('No user with that id, email or admission number');
+    if (target.id === actor.id) throw new ForbiddenException('You cannot correct your own attendance');
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.attendanceRecord.findUnique({ where: { sessionId_userId: { sessionId, userId: target.id } } });
+      let recordId: string;
+      if (dto.action === 'ADD') {
+        if (existing) throw new ConflictException(`${target.name} is already marked present`);
+        if (session.clubId) {
+          const m = await tx.clubMembership.findUnique({ where: { clubId_userId: { clubId: session.clubId, userId: target.id } } });
+          if (m?.status !== 'ACTIVE') throw new ConflictException(`${target.name} is not an active member of ${session.club?.name}`);
+        }
+        const rec = await tx.attendanceRecord.create({ data: { sessionId, userId: target.id, method: 'MANUAL', checkedInAt: session.startsAt } });
+        recordId = rec.id;
+      } else {
+        if (!existing) throw new NotFoundException(`${target.name} has no attendance record for this session`);
+        await tx.attendanceRecord.delete({ where: { id: existing.id } });
+        recordId = existing.id;
+      }
+      const c = await tx.attendanceCorrection.create({
+        data: { sessionId, userId: target.id, action: dto.action, reason: dto.reason, actorId: actor.id },
+        include: { user: { select: userSummary }, actor: { select: { id: true, name: true } } },
+      });
+      await this.audit.append(tx, {
+        actorId: actor.id,
+        action: dto.action === 'ADD' ? 'attendance.correction.add' : 'attendance.correction.remove',
+        entity: 'AttendanceRecord',
+        entityId: recordId,
+        payload: { sessionId, userId: target.id, reason: dto.reason },
+      });
+      return c;
+    });
+    await this.notifications.notifyUsers([target.id], {
+      title: dto.action === 'ADD' ? 'Attendance added by staff' : 'Attendance record removed',
+      body: `${session.title}: ${dto.reason}`,
+      type: 'INFO',
+      link: '/attendance',
+    });
+    return result;
+  }
+
+  async corrections(user: AuthUser, sessionId: string) {
+    const session = await this.prisma.attendanceSession.findUnique({ where: { id: sessionId } });
+    if (!session) throw new NotFoundException('Session not found');
+    if (!(await this.canViewTeam(user, session))) throw new ForbiddenException('Not your team');
+    return this.prisma.attendanceCorrection.findMany({
+      where: { sessionId },
+      include: { user: { select: userSummary }, actor: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Per-member attendance rate for one club across its sessions in the window. */
+  async teamReport(user: AuthUser, clubId: string, days: number) {
+    const club = await this.prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) throw new NotFoundException('Club not found');
+    if (!canIn(user, 'attendance.view_team', { clubId, sport: club.sport })) throw new ForbiddenException('You can only see attendance for teams you are responsible for');
+    const from = new Date(Date.now() - days * 86_400_000);
+    const [sessions, members] = await Promise.all([
+      this.prisma.attendanceSession.findMany({ where: { clubId, startsAt: { gte: from } }, select: { id: true, records: { select: { userId: true, method: true } } } }),
+      this.prisma.clubMembership.findMany({ where: { clubId, status: 'ACTIVE' }, include: { user: { select: userSummary } } }),
+    ]);
+    const rows = members.map((m) => {
+      const attended = sessions.filter((s) => s.records.some((r) => r.userId === m.userId)).length;
+      const manual = sessions.filter((s) => s.records.some((r) => r.userId === m.userId && r.method === 'MANUAL')).length;
+      return { user: m.user, attended, manual, sessions: sessions.length, rate: sessions.length ? Math.round((attended / sessions.length) * 1000) / 10 : null };
+    });
+    return { club: { id: club.id, name: club.name }, days, sessions: sessions.length, members: rows.sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0)) };
+  }
+
+  /** Session visibility for staff: everything if unscoped, else sessions they created or for clubs/sports in scope. */
+  private teamScope(user: AuthUser): Prisma.AttendanceSessionWhereInput {
+    const a = permissionScope(user, 'attendance.manage');
+    const v = permissionScope(user, 'attendance.view_team');
+    if (a.all || v.all) return {};
+    const clubIds = [...a.clubIds, ...v.clubIds];
+    const sports = [...a.sports, ...v.sports];
+    return {
+      OR: [
+        { createdById: user.id },
+        ...(clubIds.length ? [{ clubId: { in: clubIds } }] : []),
+        ...sports.map((sport) => ({ club: { sport: { equals: sport, mode: 'insensitive' as const } } })),
+      ],
+    };
+  }
+
+  private async canViewTeam(user: AuthUser, session: { createdById: string; clubId: string | null }) {
+    if (session.createdById === user.id) return true;
+    const scope = permissionScope(user, 'attendance.view_team');
+    if (scope.all) return true;
+    if (!session.clubId) return false;
+    const club = await this.prisma.club.findUnique({ where: { id: session.clubId }, select: { id: true, sport: true } });
+    return !!club && (canIn(user, 'attendance.view_team', { clubId: club.id, sport: club.sport }) || canIn(user, 'attendance.manage', { clubId: club.id, sport: club.sport }));
+  }
+
+  private async assertCanManage(user: AuthUser, session: { createdById: string; clubId: string | null; club?: { id: string; sport: string } | null }) {
+    if (session.createdById === user.id && can(user, 'attendance.manage')) return;
+    if (permissionScope(user, 'attendance.manage').all) return;
+    const club = session.club ?? (session.clubId ? await this.prisma.club.findUnique({ where: { id: session.clubId }, select: { id: true, sport: true } }) : null);
+    if (club && canIn(user, 'attendance.manage', { clubId: club.id, sport: club.sport })) return;
+    throw new ForbiddenException('Only the session’s creator or staff responsible for the team can do this');
+  }
+
   async mine(user: AuthUser) {
     const rows = await this.prisma.attendanceRecord.findMany({
       where: { userId: user.id },
@@ -228,10 +345,6 @@ export class AttendanceService {
     return rows.map(stripDevice);
   }
 
-  private assertManager(user: AuthUser, createdById: string) {
-    const allowed = createdById === user.id || user.role === 'SPORTS_OFFICER' || user.role === 'ADMIN';
-    if (!allowed) throw new ForbiddenException('Only the session’s creator can do this');
-  }
 }
 
 function isOpen(s: { status: string; endsAt: Date }) {

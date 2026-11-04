@@ -1,11 +1,11 @@
 'use client';
 
 import type { Match, Team, Tournament } from '@sportsos/shared';
-import { ArrowLeft, Crown, Shuffle, Trash2, Trophy, Users } from 'lucide-react';
+import { ArrowLeft, Check, Crown, Shuffle, Trash2, Trophy, UserPlus, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { useAuth } from '@/components/auth';
+import { useAuth, useUser } from '@/components/auth';
 import { Bracket, Fixtures, ScoreModal, StandingsTable } from '@/components/events';
 import { TournamentStatusBadge } from '@/components/status';
 import { useToast } from '@/components/toast';
@@ -29,10 +29,40 @@ import { HOSTELS } from '@/lib/constants';
 import { fmtDate, fromLocalInput, toLocalInput } from '@/lib/format';
 import { revalidate, useApi } from '@/lib/hooks';
 
-function TeamsCard({ tournament, editable, onChanged }: { tournament: Tournament; editable: boolean; onChanged: () => void }) {
+/**
+ * editable: event.manage_participants (any team). registerHostels: hostels a
+ * Hostel Sports Secretary may register for (event.register_team); the API enforces both.
+ */
+function TeamsCard({ tournament, editable, registerHostels, onChanged }: { tournament: Tournament; editable: boolean; registerHostels: string[]; onChanged: () => void }) {
   const toast = useToast();
+  const me = useUser();
   const [name, setName] = useState('');
-  const [hostel, setHostel] = useState('');
+  const [hostel, setHostel] = useState(editable ? '' : (registerHostels[0] ?? ''));
+  const [player, setPlayer] = useState<Record<string, string>>({});
+  const canAdd = editable || registerHostels.length > 0;
+  const controls = (t: Team) => editable || (t.registeredById === me.id && !!t.hostel && registerHostels.some((h) => h.toLowerCase() === t.hostel!.toLowerCase()));
+
+  async function addPlayer(t: Team) {
+    const student = (player[t.id] ?? '').trim();
+    if (student.length < 3) return toast.warning('Enter the player’s email or admission number');
+    try {
+      await api.post(`/tournaments/${tournament.id}/teams/${t.id}/members`, { student });
+      setPlayer((p) => ({ ...p, [t.id]: '' }));
+      toast.success('Player registered');
+      onChanged();
+    } catch (err) {
+      toast.error(err);
+    }
+  }
+
+  async function removePlayer(t: Team, memberId: string) {
+    try {
+      await api.del(`/tournaments/${tournament.id}/teams/${t.id}/members/${memberId}`);
+      onChanged();
+    } catch (err) {
+      toast.error(err);
+    }
+  }
   const [seed, setSeed] = useState('');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -59,6 +89,7 @@ function TeamsCard({ tournament, editable, onChanged }: { tournament: Tournament
   }
 
   async function remove(t: Team) {
+    if (!window.confirm(`Remove ${t.name} and its players from this tournament?`)) return;
     setRemoving(t.id);
     try {
       await api.del(`/tournaments/${tournament.id}/teams/${t.id}`);
@@ -74,17 +105,27 @@ function TeamsCard({ tournament, editable, onChanged }: { tournament: Tournament
     <Card>
       <CardHeader title="Teams" description={`${teams.length} registered`} icon={<Users className="size-4" />} />
       <CardBody>
-        {editable && (
+        {canAdd && (
           <form onSubmit={add} className="mb-4 space-y-2">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Team name, e.g. Jasper Hostel" aria-label="Team name" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Team name" aria-label="Team name" />
             <div className="flex gap-2">
-              <Select value={hostel} onChange={(e) => setHostel(e.target.value)} aria-label="Hostel" className="flex-1">
-                <option value="">Hostel (optional)</option>
-                {HOSTELS.map((h) => (
-                  <option key={h}>{h}</option>
-                ))}
-              </Select>
-              <Input type="number" min={1} value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="Seed" aria-label="Seed" className="w-20" />
+              {editable ? (
+                <>
+                  <Input value={hostel} onChange={(e) => setHostel(e.target.value)} list="hostel-suggestions" placeholder="Hostel (optional)" aria-label="Hostel" className="flex-1" />
+                  <datalist id="hostel-suggestions">
+                    {HOSTELS.map((h) => (
+                      <option key={h} value={h} />
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <Select value={hostel} onChange={(e) => setHostel(e.target.value)} aria-label="Your hostel" className="flex-1">
+                  {registerHostels.map((h) => (
+                    <option key={h}>{h}</option>
+                  ))}
+                </Select>
+              )}
+              {editable && <Input type="number" min={1} value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="Seed" aria-label="Seed" className="w-20" />}
               <Button type="submit" variant="accent" loading={busy}>
                 Add
               </Button>
@@ -97,11 +138,12 @@ function TeamsCard({ tournament, editable, onChanged }: { tournament: Tournament
         ) : (
           <ul className="divide-y divide-border">
             {teams.map((t) => (
-              <li key={t.id} className="flex items-center gap-2 py-2">
+              <li key={t.id} className="py-2">
+                <div className="flex items-center gap-2">
                 <span className="w-6 text-right text-xs text-muted tabular">{t.seed ?? '–'}</span>
                 <span className="min-w-0 flex-1 truncate text-sm text-text">{t.name}</span>
                 {t.hostel && <Badge tone="neutral">{t.hostel}</Badge>}
-                {editable && (
+                {controls(t) && tournament.status === 'DRAFT' && (
                   <button
                     type="button"
                     onClick={() => remove(t)}
@@ -111,6 +153,29 @@ function TeamsCard({ tournament, editable, onChanged }: { tournament: Tournament
                   >
                     <Trash2 className="size-3.5" />
                   </button>
+                )}
+                </div>
+                {(t.members?.length ?? 0) > 0 && (
+                  <ul className="mt-1 ml-8 space-y-0.5">
+                    {t.members!.map((m) => (
+                      <li key={m.id} className="flex items-center gap-1 text-xs text-text-2">
+                        {m.user?.name ?? 'Player'}
+                        {controls(t) && tournament.status === 'DRAFT' && (
+                          <button type="button" aria-label="Remove player" onClick={() => removePlayer(t, m.id)} className="rounded p-0.5 text-muted hover:text-danger-ink">
+                            <X className="size-3" />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {controls(t) && tournament.status === 'DRAFT' && (
+                  <div className="mt-1 ml-8 flex gap-1">
+                    <Input value={player[t.id] ?? ''} onChange={(e) => setPlayer((p) => ({ ...p, [t.id]: e.target.value }))} placeholder="Player email or admission no." aria-label={`Add player to ${t.name}`} className="h-7 text-xs" />
+                    <Button size="sm" variant="ghost" icon={<UserPlus className="size-3.5" />} onClick={() => addPlayer(t)}>
+                      Add
+                    </Button>
+                  </div>
                 )}
               </li>
             ))}
@@ -204,7 +269,7 @@ function GenerateModal({ tournament, open, onClose, onDone }: { tournament: Tour
 
 export default function TournamentPage() {
   const { id } = useParams<{ id: string }>();
-  const { can } = useAuth();
+  const { can, roles } = useAuth();
   const { data: t, error, isLoading, mutate } = useApi<Tournament>(`/tournaments/${id}`, undefined, { refreshInterval: 20000 });
   const [editing, setEditing] = useState<Match | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -231,8 +296,10 @@ export default function TournamentPage() {
       </div>
     );
 
-  const manage = can('events:manage');
-  const score = can('events:score');
+  const manage = can('event.manage_participants');
+  const publish = can('event.publish');
+  const registerHostels = roles.filter((r) => r.role === 'HOSTEL_SECRETARY' && r.scopeType === 'HOSTEL' && r.scopeId).map((r) => r.scopeId);
+  const score = can('event.record_results');
   const draft = t.status === 'DRAFT';
   const champion = t.championId ? t.teams?.find((x) => x.id === t.championId) : null;
   const matches = t.matches ?? [];
@@ -250,7 +317,7 @@ export default function TournamentPage() {
         }
         description={t.description ?? `Starts ${fmtDate(t.startDate)}`}
         actions={
-          manage &&
+          publish &&
           draft && (
             <Button variant="primary" icon={<Shuffle className="size-4" />} disabled={(t.teams?.length ?? 0) < 2} onClick={() => setGenerating(true)}>
               Generate fixtures
@@ -258,6 +325,8 @@ export default function TournamentPage() {
           )
         }
       />
+
+      {(t.status === 'PROPOSED' || t.status === 'REJECTED') && <ProposalBanner tournament={t} onDone={() => mutate()} />}
 
       {t.status === 'COMPLETED' && champion && (
         <div className="mb-6 flex items-center gap-4 rounded-2xl bg-primary px-6 py-5 text-primary-fg">
@@ -274,7 +343,7 @@ export default function TournamentPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         <div className="xl:col-span-1">
-          <TeamsCard tournament={t} editable={manage && draft} onChanged={() => mutate()} />
+          <TeamsCard tournament={t} editable={manage && draft} registerHostels={draft && can('event.register_team') ? registerHostels : []} onChanged={() => mutate()} />
         </div>
         <div className="space-y-6 xl:col-span-3">
           {!matches.length ? (
@@ -318,6 +387,50 @@ export default function TournamentPage() {
 
       <ScoreModal match={editing} format={t.format} onClose={() => setEditing(null)} onSaved={() => mutate()} />
       {draft && <GenerateModal tournament={t} open={generating} onClose={() => setGenerating(false)} onDone={() => mutate()} />}
+    </div>
+  );
+}
+
+function ProposalBanner({ tournament, onDone }: { tournament: Tournament; onDone: () => void }) {
+  const { can } = useAuth();
+  const me = useUser();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const reviewer = can('event.approve') && tournament.organizerId !== me.id;
+
+  async function review(approve: boolean) {
+    const note = window.prompt(approve ? 'Approval note (optional)' : 'Why is this proposal declined?');
+    if (note === null || (!approve && note.trim().length < 3)) return;
+    setBusy(true);
+    try {
+      await api.post(`/tournaments/${tournament.id}/${approve ? 'approve' : 'reject'}`, note.trim() ? { note: note.trim() } : {});
+      toast.success(approve ? 'Proposal approved — registration is open' : 'Proposal declined');
+      await revalidate('/tournaments');
+      onDone();
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-warn-soft px-4 py-3 text-sm text-warn-ink">
+      <span className="flex-1">
+        {tournament.status === 'PROPOSED'
+          ? 'This tournament is a proposal awaiting approval by the Sports Officer, President SPEC or Dean (SW). Teams cannot register yet.'
+          : `This proposal was declined${tournament.reviewNote ? `: ${tournament.reviewNote}` : '.'}`}
+      </span>
+      {tournament.status === 'PROPOSED' && reviewer && (
+        <>
+          <Button size="sm" variant="primary" icon={<Check className="size-3.5" />} loading={busy} onClick={() => review(true)}>
+            Approve
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => review(false)}>
+            Decline
+          </Button>
+        </>
+      )}
     </div>
   );
 }

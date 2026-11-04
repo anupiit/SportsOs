@@ -102,7 +102,7 @@ function StatusCard() {
                 No Claude API key is configured on the server, so answers are assembled from retrieved records without an LLM.
               </p>
             )}
-            {can('ai:report') && (
+            {can('ai.report') && (
               <Button size="sm" icon={<RefreshCw className="size-3.5" />} loading={reindexing} onClick={reindex} className="w-full">
                 Re-index live data
               </Button>
@@ -462,7 +462,7 @@ export default function AssistantPage() {
         </Card>
         <div className="space-y-6">
           <StatusCard />
-          {can('ai:report') && <ReportPanel />}
+          {can('ai.report') && <ReportPanel />}
         </div>
       </div>
     </div>

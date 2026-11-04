@@ -145,7 +145,7 @@ export default function NotificationsPage() {
         }
       />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <Card className={can('notifications:broadcast') ? 'xl:col-span-2' : 'xl:col-span-3'}>
+        <Card className={can('notification.broadcast') ? 'xl:col-span-2' : 'xl:col-span-3'}>
           <CardHeader title="Inbox" description={unread ? `${unread} unread` : 'All caught up'} icon={<Bell className="size-4" />} />
           <CardBody>
             {error ? (
@@ -182,7 +182,7 @@ export default function NotificationsPage() {
             )}
           </CardBody>
         </Card>
-        {can('notifications:broadcast') && <BroadcastCard />}
+        {can('notification.broadcast') && <BroadcastCard />}
       </div>
     </div>
   );

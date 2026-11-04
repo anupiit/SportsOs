@@ -5,6 +5,7 @@ import type { AuthUser } from '../common/auth-user';
 import { istMidnight, todayIst } from '../common/time';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertCanIn } from '../rbac/access';
 import { CreateFacilityDto, FacilityStatusDto, UpdateFacilityDto } from './facilities.dto';
 
 @Injectable()
@@ -48,6 +49,8 @@ export class FacilitiesService {
 
   /** Live ground status from ground staff; people booked there today are told when it closes. */
   async setStatus(actor: AuthUser, id: string, dto: FacilityStatusDto) {
+    // ground staff assigned to specific facilities can only update those
+    assertCanIn(actor, 'facility.update_status', { facilityId: id }, 'You are not assigned to this facility');
     const before = await this.get(id);
     return this.prisma.$transaction(async (tx) => {
       const facility = await tx.facility.update({ where: { id }, data: { status: dto.status, statusNote: dto.note ?? null } });

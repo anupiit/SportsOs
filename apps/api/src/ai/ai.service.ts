@@ -6,7 +6,13 @@ import type { AiAnswer, AiAskRequest, AiReport, AiSource, AiStatus } from '@spor
 import { AnalyticsService } from '../analytics/analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { KnowledgeService } from './knowledge.service';
-import { LocalBm25Store, PineconeStore, SearchHit, VectorStore } from './vector-store';
+import { LocalBm25Store, mayRead, PineconeStore, SearchHit, VectorStore } from './vector-store';
+
+/** The parts of the principal the assistant needs: who is asking and what they may see. */
+export interface AiPrincipal {
+  id: string;
+  permissions: readonly string[];
+}
 
 export type AskEvent =
   | { type: 'sources'; sources: AiSource[] }
@@ -19,7 +25,7 @@ const TOP_K = 6;
 const SYSTEM_PROMPT = `You are SportsOS Assistant, the analytics and help desk for the sports ERP of IIT (ISM) Dhanbad.
 You answer questions from students, coaches, staff and administrators about facilities, bookings, attendance, equipment, clubs, tournaments and operational statistics.
 
-Ground every factual statement in the <context> documents supplied with the question; they are generated from the live ERP database. If the context does not contain the answer, say so plainly and suggest where in SportsOS the person can look (e.g. the Facilities page, Analytics, Inventory). Never invent numbers, names, bookings or schedules.
+Ground every factual statement in the <context> documents supplied with the question. The context has already been filtered to what this user is authorised to see; if it lacks the answer, say the information is not available to them in SportsOS rather than guessing, and never speculate about data that may have been withheld. Never invent facts about IIT (ISM) Dhanbad, its staff or students; they are generated from the live ERP database. If the context does not contain the answer, say so plainly and suggest where in SportsOS the person can look (e.g. the Facilities page, Analytics, Inventory). Never invent numbers, names, bookings or schedules.
 
 Keep answers short and practical: lead with the direct answer, then at most a few bullet points. Use IST times. When a question is about the future, cite the forecast and its uncertainty rather than stating a single number as fact.`;
 
@@ -49,7 +55,8 @@ export class AiService implements OnApplicationBootstrap {
       : this.local;
     const apiKey = config.get<string>('ANTHROPIC_API_KEY') || null;
     const authToken = config.get<string>('ANTHROPIC_AUTH_TOKEN') || null;
-    this.claude = apiKey || authToken ? new Anthropic({ apiKey, authToken }) : null;
+    const timeout = Number(config.get('AI_TIMEOUT_MS', 60_000));
+    this.claude = apiKey || authToken ? new Anthropic({ apiKey, authToken, timeout, maxRetries: 2 }) : null;
     this.model = config.get('CLAUDE_MODEL', 'claude-opus-5-5');
   }
 
@@ -88,11 +95,11 @@ export class AiService implements OnApplicationBootstrap {
     return this.indexing;
   }
 
-  async ask(req: AiAskRequest): Promise<AiAnswer> {
+  async ask(req: AiAskRequest, user: AiPrincipal): Promise<AiAnswer> {
     let answer = '';
     let sources: AiSource[] = [];
     let generatedBy: 'claude' | 'offline' = 'offline';
-    for await (const ev of this.askStream(req)) {
+    for await (const ev of this.askStream(req, user)) {
       if (ev.type === 'sources') sources = ev.sources;
       else if (ev.type === 'delta') answer += ev.text;
       else if (ev.type === 'done') generatedBy = ev.generatedBy;
@@ -101,15 +108,31 @@ export class AiService implements OnApplicationBootstrap {
     return { answer, sources, generatedBy };
   }
 
-  async *askStream(req: AiAskRequest, signal?: AbortSignal): AsyncGenerator<AskEvent> {
-    const hits = await this.retrieve(req.question);
-    yield { type: 'sources', sources: hits.map((h) => ({ id: h.id, title: h.title, score: Math.round(h.score * 1000) / 1000 })) };
-
-    if (!this.claude) {
-      yield { type: 'delta', text: offlineAnswer(hits) };
-      yield { type: 'done', generatedBy: 'offline' };
-      return;
+  async *askStream(req: AiAskRequest, user: AiPrincipal, signal?: AbortSignal): AsyncGenerator<AskEvent> {
+    const started = Date.now();
+    const { hits, withheld } = await this.retrieve(req.question, user.permissions);
+    const usage = { status: 'offline', provider: 'offline', inputTokens: null as number | null, outputTokens: null as number | null };
+    try {
+      yield { type: 'sources', sources: hits.map((h) => ({ id: h.id, title: h.title, score: Math.round(h.score * 1000) / 1000 })) };
+      if (!this.claude) {
+        yield { type: 'delta', text: offlineAnswer(hits) };
+        yield { type: 'done', generatedBy: 'offline' };
+        return;
+      }
+      usage.provider = 'anthropic';
+      yield* this.claudeAnswer(req, hits, usage, signal);
+    } finally {
+      await this.logUsage(user.id, 'ask', usage, Date.now() - started, hits.length, withheld);
     }
+  }
+
+  private async *claudeAnswer(
+    req: AiAskRequest,
+    hits: SearchHit[],
+    usage: { status: string; inputTokens: number | null; outputTokens: number | null },
+    signal?: AbortSignal,
+  ): AsyncGenerator<AskEvent> {
+    if (!this.claude) return;
 
     const context = hits.map((h) => `<document title="${h.title}">\n${h.text}\n</document>`).join('\n');
     const messages: Anthropic.Beta.BetaMessageParam[] = [
@@ -135,11 +158,15 @@ export class AiService implements OnApplicationBootstrap {
         }
       }
       const final = await stream.finalMessage();
+      usage.inputTokens = final.usage?.input_tokens ?? null;
+      usage.outputTokens = final.usage?.output_tokens ?? null;
+      usage.status = final.stop_reason === 'refusal' ? 'refused' : 'ok';
       if (final.stop_reason === 'refusal') {
         yield { type: 'delta', text: '\n\nI can’t help with that request. Try rephrasing it as a question about SportsOS data.' };
       }
       yield { type: 'done', generatedBy: 'claude' };
     } catch (e) {
+      usage.status = signal?.aborted ? 'aborted' : 'error';
       if (signal?.aborted) return;
       this.logger.error(`Claude request failed: ${describeError(e)}`);
       yield { type: 'error', message: 'The AI service is unavailable right now. Here is what SportsOS found:' };
@@ -149,7 +176,8 @@ export class AiService implements OnApplicationBootstrap {
   }
 
   /** Executive report from live analytics; written by Claude, or templated offline. */
-  async report(period: 'week' | 'month'): Promise<AiReport> {
+  async report(period: 'week' | 'month', userId: string | null = null): Promise<AiReport> {
+    const started = Date.now();
     const data = await this.reportData(period);
     const generatedAt = new Date().toISOString();
     if (this.claude) {
@@ -166,23 +194,51 @@ export class AiService implements OnApplicationBootstrap {
         const final = await stream.finalMessage();
         if (final.stop_reason !== 'refusal') {
           const markdown = final.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('').trim();
-          if (markdown) return { period, markdown, generatedBy: 'claude', generatedAt };
+          if (markdown) {
+            await this.logUsage(userId, 'report', { status: 'ok', provider: 'anthropic', inputTokens: final.usage?.input_tokens ?? null, outputTokens: final.usage?.output_tokens ?? null }, Date.now() - started, 0, 0);
+            return { period, markdown, generatedBy: 'claude', generatedAt };
+          }
         }
       } catch (e) {
         this.logger.error(`Claude report failed, using template: ${describeError(e)}`);
       }
     }
+    await this.logUsage(userId, 'report', { status: 'offline', provider: 'offline', inputTokens: null, outputTokens: null }, Date.now() - started, 0, 0);
     return { period, markdown: templateReport(period, data), generatedBy: 'offline', generatedAt };
   }
 
-  private async retrieve(question: string): Promise<SearchHit[]> {
+  /**
+   * Permission-aware retrieval: over-fetch, then drop every document the asker
+   * could not read through the REST API, so the model never sees it.
+   */
+  private async retrieve(question: string, permissions: readonly string[]): Promise<{ hits: SearchHit[]; withheld: number }> {
     if (this.store.count() === 0 && this.local.count() === 0) await this.reindex();
+    let raw: SearchHit[];
     try {
-      return await this.store.search(question, TOP_K);
+      raw = await this.store.search(question, TOP_K * 4);
     } catch (e) {
       this.logger.warn(`${this.store.name} search failed, using local index: ${(e as Error).message}`);
-      return this.local.search(question, TOP_K);
+      raw = await this.local.search(question, TOP_K * 4);
     }
+    const allowed = raw.filter((h) => mayRead(permissions, h.id));
+    return { hits: allowed.slice(0, TOP_K), withheld: raw.length - allowed.length };
+  }
+
+  /** Records request metadata only (no question or answer text). Never fails the request. */
+  private async logUsage(userId: string | null, kind: string, u: { status: string; provider?: string; inputTokens: number | null; outputTokens: number | null }, latencyMs: number, docsUsed: number, docsWithheld: number) {
+    try {
+      await this.prisma.aiUsageLog?.create({
+        data: { userId, kind, provider: u.provider ?? (this.claude ? 'anthropic' : 'offline'), model: this.claude ? this.model : null, status: u.status, inputTokens: u.inputTokens, outputTokens: u.outputTokens, latencyMs, docsUsed, docsWithheld },
+      });
+    } catch (e) {
+      this.logger.warn(`AI usage log failed: ${(e as Error).message}`);
+    }
+  }
+
+  async usage(days: number) {
+    const since = new Date(Date.now() - days * 86_400_000);
+    const rows = await this.prisma.aiUsageLog.groupBy({ by: ['kind', 'provider', 'status'], where: { createdAt: { gte: since } }, _count: true, _sum: { inputTokens: true, outputTokens: true, docsWithheld: true }, _avg: { latencyMs: true } });
+    return { days, rows: rows.map((r) => ({ kind: r.kind, provider: r.provider, status: r.status, requests: r._count, inputTokens: r._sum.inputTokens ?? 0, outputTokens: r._sum.outputTokens ?? 0, docsWithheld: r._sum.docsWithheld ?? 0, avgLatencyMs: Math.round(r._avg.latencyMs ?? 0) })) };
   }
 
   private async reportData(period: 'week' | 'month') {

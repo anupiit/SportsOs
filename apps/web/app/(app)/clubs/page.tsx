@@ -15,7 +15,7 @@ import { revalidate, useApi } from '@/lib/hooks';
 function CreateClubModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { can } = useAuth();
   const toast = useToast();
-  const { data: coaches } = useApi<User[]>(open && can('users:read') ? '/users' : null, { role: 'COACH' });
+  const { data: coaches } = useApi<User[]>(open && can('user.view') ? '/users' : null, { role: 'COACH' });
   const [form, setForm] = useState({ name: '', sport: SPORTS[0], description: '', coachId: '' });
   const [busy, setBusy] = useState(false);
 
@@ -115,7 +115,7 @@ export default function ClubsPage() {
         title="Clubs"
         description="Join a club for representational access: practice sessions, verified attendance and tournament rosters."
         actions={
-          can('clubs:manage') && (
+          can('club.create') && (
             <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
               New club
             </Button>

@@ -25,7 +25,12 @@ export const ROLES = [
 
 export type Role = (typeof ROLES)[number];
 
-export type RoleTier = 'LEADERSHIP' | 'ADMINISTRATION' | 'STAFF' | 'COUNCIL' | 'STUDENT' | 'SYSTEM';
+/**
+ * Groups used on the organisation chart:
+ * LEADERSHIP (institutional leadership), ADMINISTRATION + STAFF (sports administration & operations),
+ * COUNCIL (student sports administration), EVENT (event administration), SYSTEM (platform), STUDENT (general access).
+ */
+export type RoleTier = 'LEADERSHIP' | 'ADMINISTRATION' | 'STAFF' | 'COUNCIL' | 'EVENT' | 'STUDENT' | 'SYSTEM';
 
 export interface RoleInfo {
   label: string;
@@ -40,7 +45,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     label: 'Director, IIT (ISM) Dhanbad',
     tier: 'LEADERSHIP',
     reportsTo: null,
-    description: 'Institute-wide oversight; read-only executive dashboards and reports.',
+    description: 'Institute-wide oversight; read-only executive dashboards and reports (retained from the original implementation).',
   },
   DEAN_SW: {
     label: "Dean (Students' Welfare)",
@@ -62,15 +67,15 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
   },
   GENERAL_SECRETARY: {
     label: 'General Secretary',
-    tier: 'ADMINISTRATION',
+    tier: 'COUNCIL',
     reportsTo: 'SPEC_PRESIDENT',
-    description: 'Student lead of the Sports Council; approves club and event bookings.',
+    description: 'Student lead of the Sports Council; coordinates student sports activity and submits proposals.',
   },
   EVENT_COMMITTEE: {
     label: 'Event Committee',
-    tier: 'ADMINISTRATION',
+    tier: 'EVENT',
     reportsTo: 'SPEC_PRESIDENT',
-    description: 'Plans tournaments, fixtures and annual sports events.',
+    description: 'Plans tournaments, fixtures, venues and results for sports events.',
   },
   COACH: {
     label: 'Coach',
@@ -100,7 +105,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     label: 'Operations Staff',
     tier: 'STAFF',
     reportsTo: 'SPORTS_OFFICER',
-    description: 'Handles scheduling, approvals and complaints.',
+    description: 'Carries out assigned operational tasks and facility coordination.',
   },
   SPORTS_COUNCIL: {
     label: 'Sports Council',
@@ -142,7 +147,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     label: 'System Administrator',
     tier: 'SYSTEM',
     reportsTo: null,
-    description: 'Technical administrator with full access.',
+    description: 'Platform administrator: users, roles, permissions, integrations and audit. Not an operational approver.',
   },
 };
 

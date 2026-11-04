@@ -115,7 +115,7 @@ export default function EventsPage() {
   const { data, error, isLoading, mutate } = useApi<Tournament[]>('/tournaments');
   const [creating, setCreating] = useState(false);
   const sorted = [...(data ?? [])].sort((a, b) => {
-    const order = { ONGOING: 0, DRAFT: 1, COMPLETED: 2 };
+    const order = { PROPOSED: 0, ONGOING: 1, DRAFT: 2, COMPLETED: 3, REJECTED: 4 };
     return order[a.status] - order[b.status] || b.startDate.localeCompare(a.startDate);
   });
 
@@ -126,7 +126,7 @@ export default function EventsPage() {
         title="Tournaments"
         description="Inter-hostel and institute events with seeded brackets, round-robin leagues and live results."
         actions={
-          can('events:manage') && (
+          can('event.create') && (
             <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
               New tournament
             </Button>

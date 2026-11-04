@@ -5,6 +5,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AchievementsModule } from './achievements/achievements.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
+import { TasksModule } from './tasks/tasks.module';
+import { InstitutionModule } from './institution/institution.module';
 import { AiModule } from './ai/ai.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AttendanceModule } from './attendance/attendance.module';
@@ -21,6 +24,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { JobsModule } from './jobs/jobs.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RbacModule } from './rbac/rbac.module';
 import { TournamentsModule } from './tournaments/tournaments.module';
 import { UsersModule } from './users/users.module';
 
@@ -40,6 +44,7 @@ import { UsersModule } from './users/users.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     AuditModule,
+    RbacModule,
     NotificationsModule,
     AuthModule,
     UsersModule,
@@ -54,6 +59,9 @@ import { UsersModule } from './users/users.module';
     AnalyticsModule,
     AiModule,
     JobsModule,
+    AnnouncementsModule,
+    TasksModule,
+    InstitutionModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -11,26 +11,28 @@ import { Button, Field, Input, Notice } from '@/components/ui';
 import { errorMessage } from '@/lib/api';
 
 const DEMO_PASSWORD = 'sportsos123';
+/** The synthetic-account panel is for demos only; set NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=false in production. */
+const SHOW_DEMO = process.env.NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS !== 'false';
 
 const DEMO_ACCOUNTS: { role: Role; email: string }[] = [
-  { role: 'ADMIN', email: 'admin@iitism.ac.in' },
-  { role: 'DIRECTOR', email: 'director@iitism.ac.in' },
-  { role: 'DEAN_SW', email: 'dean.sw@iitism.ac.in' },
-  { role: 'SPEC_PRESIDENT', email: 'spec.president@iitism.ac.in' },
-  { role: 'SPORTS_OFFICER', email: 'peso@iitism.ac.in' },
-  { role: 'GENERAL_SECRETARY', email: 'gsec.sports@iitism.ac.in' },
-  { role: 'EVENT_COMMITTEE', email: 'events@iitism.ac.in' },
-  { role: 'COACH', email: 'coach.football@iitism.ac.in' },
-  { role: 'GROUND_STAFF', email: 'ground@iitism.ac.in' },
-  { role: 'EQUIPMENT_MANAGER', email: 'equipment@iitism.ac.in' },
-  { role: 'SECURITY_STAFF', email: 'security@iitism.ac.in' },
-  { role: 'OPERATIONS_STAFF', email: 'operations@iitism.ac.in' },
-  { role: 'SPORTS_COUNCIL', email: 'council@iitism.ac.in' },
-  { role: 'SPORT_COORDINATOR', email: 'coord.cricket@iitism.ac.in' },
-  { role: 'HOSTEL_SECRETARY', email: 'hostelsec.jasper@iitism.ac.in' },
-  { role: 'MEDIA_NOMINEE', email: 'media@iitism.ac.in' },
-  { role: 'CLUB_MEMBER', email: '22je0143@iitism.ac.in' },
-  { role: 'STUDENT', email: 'student@iitism.ac.in' },
+  { role: 'ADMIN', email: 'admin@sportsos.demo' },
+  { role: 'DIRECTOR', email: 'director@sportsos.demo' },
+  { role: 'DEAN_SW', email: 'dean.sw@sportsos.demo' },
+  { role: 'SPEC_PRESIDENT', email: 'spec.president@sportsos.demo' },
+  { role: 'SPORTS_OFFICER', email: 'peso@sportsos.demo' },
+  { role: 'GENERAL_SECRETARY', email: 'gsec.sports@sportsos.demo' },
+  { role: 'EVENT_COMMITTEE', email: 'events@sportsos.demo' },
+  { role: 'COACH', email: 'coach.football@sportsos.demo' },
+  { role: 'GROUND_STAFF', email: 'ground@sportsos.demo' },
+  { role: 'EQUIPMENT_MANAGER', email: 'equipment@sportsos.demo' },
+  { role: 'SECURITY_STAFF', email: 'security@sportsos.demo' },
+  { role: 'OPERATIONS_STAFF', email: 'operations@sportsos.demo' },
+  { role: 'SPORTS_COUNCIL', email: 'council@sportsos.demo' },
+  { role: 'SPORT_COORDINATOR', email: 'coord.cricket@sportsos.demo' },
+  { role: 'HOSTEL_SECRETARY', email: 'hostelsec.a@sportsos.demo' },
+  { role: 'MEDIA_NOMINEE', email: 'media@sportsos.demo' },
+  { role: 'CLUB_MEMBER', email: 'club.member@sportsos.demo' },
+  { role: 'STUDENT', email: 'student@sportsos.demo' },
 ];
 
 function nextPath(): string {
@@ -81,7 +83,7 @@ export default function LoginPage() {
             id="email"
             type="email"
             autoComplete="username"
-            placeholder="22je0143@iitism.ac.in"
+            placeholder="you@iitism.ac.in"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -109,14 +111,15 @@ export default function LoginPage() {
         </Link>
       </p>
 
+      {SHOW_DEMO && (
       <div className="mt-8 rounded-xl border border-border bg-surface p-4">
         <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold text-text">Demo accounts</h3>
+          <h3 className="text-sm font-semibold text-text">Demo accounts (synthetic data)</h3>
           <span className="text-[11px] text-muted">
             password <code className="rounded bg-surface-2 px-1 py-0.5">{DEMO_PASSWORD}</code>
           </span>
         </div>
-        <p className="mt-0.5 text-xs text-muted">One per stakeholder role — click to sign in as that role.</p>
+        <p className="mt-0.5 text-xs text-muted">One synthetic account per role, for a seeded DEMO database only. These are not real IIT (ISM) people.</p>
         <div className="mt-3 grid max-h-64 grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
           {DEMO_ACCOUNTS.map((a) => (
             <button
@@ -136,6 +139,7 @@ export default function LoginPage() {
           ))}
         </div>
       </div>
+      )}
     </AuthLayout>
   );
 }

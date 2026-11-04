@@ -47,7 +47,7 @@ export default function FacilitiesPage() {
         title="Facilities"
         description="Live status of grounds, courts and halls. Pick a facility to see free slots and book."
         actions={
-          can('facilities:manage') && (
+          can('facility.manage') && (
             <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
               New facility
             </Button>
@@ -142,7 +142,7 @@ export default function FacilitiesPage() {
                     {f.status === 'OPEN' ? 'View slots & book' : 'View details'}
                   </Button>
                 </Link>
-                {can('facilities:status') && (
+                {can('facility.update_status') && (
                   <Button variant="secondary" icon={<Wrench className="size-3.5" />} onClick={() => setStatusFor(f)}>
                     Status
                   </Button>

@@ -16,21 +16,22 @@ async function call(method, path, token, body) {
 }
 const login = async (email) => (await call('POST', '/auth/login', null, { email, password: 'sportsos123' })).data;
 
-const admin = await login('admin@iitism.ac.in');
-const peso = await login('peso@iitism.ac.in');
-const anup = await login('22je0143@iitism.ac.in');
-const casual = await login('student@iitism.ac.in');
-const coach = await login('coach.football@iitism.ac.in');
-const gsec = await login('gsec.sports@iitism.ac.in');
-const security = await login('security@iitism.ac.in');
-const equip = await login('equipment@iitism.ac.in');
-const events = await login('events@iitism.ac.in');
+const admin = await login('admin@sportsos.demo');
+const peso = await login('peso@sportsos.demo');
+const anup = await login('club.member@sportsos.demo');
+const casual = await login('student@sportsos.demo');
+const coach = await login('coach.football@sportsos.demo');
+const gsec = await login('gsec.sports@sportsos.demo');
+const security = await login('security@sportsos.demo');
+const equip = await login('equipment@sportsos.demo');
+const events = await login('events@sportsos.demo');
 ok(anup.accessToken && anup.user.role === 'CLUB_MEMBER', 'login club member', anup.user?.name);
 ok(!('passwordHash' in anup.user), 'password hash never returned');
-ok((await call('POST', '/auth/login', null, { email: 'nobody@iitism.ac.in', password: 'wrong' })).status === 401, 'unknown account → 401');
+ok((await call('POST', '/auth/login', null, { email: 'nobody@sportsos.demo', password: 'wrong' })).status === 401, 'unknown account → 401');
 ok((await call('GET', '/facilities')).status === 401, 'no token → 401');
 ok((await call('GET', '/analytics/overview', anup.accessToken)).status === 403, 'student → analytics 403');
-ok(admin.permissions.length === 20 && casual.permissions.length === 0, 'permission sets', `admin ${admin.permissions.length}, student ${casual.permissions.length}`);
+ok(admin.permissions.includes('role.manage_permissions') && !admin.permissions.includes('booking.approve') && casual.permissions.includes('booking.create') && !casual.permissions.includes('booking.approve'), 'permission sets (explicit, admin is not an operational approver)', `admin ${admin.permissions.length}, student ${casual.permissions.length}`);
+ok((await call('GET', '/auth/me', gsec.accessToken)).data.heldRoles?.includes('GENERAL_SECRETARY'), 'me lists held roles');
 
 // register
 ok((await call('POST', '/auth/register', null, { name: 'Out Sider', email: 'x@gmail.com', password: 'longpassword' })).status === 400, 'register non-institute email → 400');
@@ -65,12 +66,13 @@ const fbAvail = (await call('GET', `/facilities/${fb.id}/availability?date=${day
 const fbFree = fbAvail.slots.find((s) => s.available);
 const b2 = await call('POST', '/bookings', anup.accessToken, { facilityId: fb.id, start: fbFree.start, end: fbFree.end, purpose: 'Hostel practice', type: 'CASUAL', participants: 10 });
 ok(b2.data.status === 'PENDING', 'approval-required booking → PENDING');
-const appr = await call('POST', `/bookings/${b2.data.id}/approve`, gsec.accessToken);
-ok(appr.status === 200 && appr.data.status === 'APPROVED', 'GSec approves');
-ok((await call('POST', `/bookings/${b2.data.id}/approve`, gsec.accessToken)).status === 409, 'double approve → 409');
+ok((await call('POST', `/bookings/${b2.data.id}/approve`, gsec.accessToken)).status === 403, 'GSec cannot approve bookings (submits requests only)');
+const appr = await call('POST', `/bookings/${b2.data.id}/approve`, peso.accessToken);
+ok(appr.status === 200 && appr.data.status === 'APPROVED', 'Sports Officer approves');
+ok((await call('POST', `/bookings/${b2.data.id}/approve`, peso.accessToken)).status === 409, 'double approve → 409');
 const cancel = await call('POST', `/bookings/${b1.data.id}/cancel`, casual.accessToken);
 ok(cancel.data.status === 'CANCELLED', 'owner cancels');
-ok((await call('POST', `/bookings/${b2.data.id}/cancel`, gsec.accessToken)).data.status === 'CANCELLED', 'approver cancels'); // keeps reruns under the booking cap
+ok((await call('POST', `/bookings/${b2.data.id}/cancel`, peso.accessToken, { reason: 'Smoke test cleanup' })).data.status === 'CANCELLED', 'approver cancels with reason'); // keeps reruns under the booking cap
 
 // verified attendance
 const clubs = (await call('GET', '/clubs', coach.accessToken)).data;
@@ -95,7 +97,7 @@ ok(dup.data.outcome === 'DUPLICATE', 'second check-in DUPLICATE');
 const notMember = await call('POST', '/attendance/check-in', casual.accessToken, { sessionId: sess.data.id, otp: otp.code, ...inside, deviceId: 'device-casual-01' });
 ok(notMember.data.outcome === 'NOT_ELIGIBLE', 'non-member NOT_ELIGIBLE');
 const detail = (await call('GET', `/clubs/${football.id}`, coach.accessToken)).data;
-const mate = detail.members.find((m) => m.status === 'ACTIVE' && m.user.email !== '22je0143@iitism.ac.in');
+const mate = detail.members.find((m) => m.status === 'ACTIVE' && m.user.email !== 'club.member@sportsos.demo');
 const mateLogin = await login(mate.user.email);
 const proxy = await call('POST', '/attendance/check-in', mateLogin.accessToken, { sessionId: sess.data.id, otp: otp.code, ...inside, deviceId: 'device-anup-0001' });
 ok(proxy.data.outcome === 'DEVICE_REUSED', 'proxy from same device DEVICE_REUSED');
@@ -114,9 +116,9 @@ ok(items.length === 15 && low.length >= 2, 'inventory listed', `low stock: ${low
 ok(items.every((i) => i.totalQty === i.availableQty + i.issuedQty + i.damagedQty), 'stock invariant total = available + issued + damaged');
 const byQr = await call('GET', `/inventory/items/by-qr/${ball.qrCode}`, anup.accessToken);
 ok(byQr.data.id === ball.id, 'lookup by QR');
-const issue = await call('POST', '/inventory/issues', equip.accessToken, { qrCode: 'sportsos://equipment/' + ball.qrCode, borrower: '22JE0143', quantity: 2 });
-ok(issue.status === 201 && issue.data.borrower.name === 'Anup Kumar', 'issue via QR + admission no.');
-const over = await call('POST', '/inventory/issues', equip.accessToken, { equipmentId: ball.id, borrower: '22je0143@iitism.ac.in', quantity: 99 });
+const issue = await call('POST', '/inventory/issues', equip.accessToken, { qrCode: 'sportsos://equipment/' + ball.qrCode, borrower: '22ZZ0143', quantity: 2 });
+ok(issue.status === 201 && issue.data.borrower.name === '[DEMO] Club Member', 'issue via QR + admission no.');
+const over = await call('POST', '/inventory/issues', equip.accessToken, { equipmentId: ball.id, borrower: 'club.member@sportsos.demo', quantity: 99 });
 ok(over.status === 400 || over.status === 409, 'over-issue rejected', over.data.message);
 const ret = await call('POST', `/inventory/issues/${issue.data.id}/return`, equip.accessToken, { returnedQty: 2, damagedQty: 1 });
 ok(ret.data.status === 'RETURNED' && ret.data.damagedQty === 1, 'return with damage');
@@ -131,6 +133,10 @@ ok((await call('GET', '/audit/verify', anup.accessToken)).status === 403, 'stude
 
 // tournaments
 const t = await call('POST', '/tournaments', events.accessToken, { name: 'Smoke Cup', sport: 'Volleyball', format: 'SINGLE_ELIMINATION', startDate: new Date(Date.now() + 86400e3).toISOString() });
+ok(t.data.status === 'PROPOSED', 'event committee creates a proposal', t.data.status);
+ok((await call('POST', `/tournaments/${t.data.id}/approve`, events.accessToken, {})).status === 403, 'committee cannot approve its own proposal');
+ok((await call('GET', `/tournaments/${t.data.id}`, anup.accessToken)).status === 404, 'students cannot see unapproved proposals');
+ok((await call('POST', `/tournaments/${t.data.id}/approve`, peso.accessToken, { note: 'Smoke approval' })).data.status === 'DRAFT', 'Sports Officer approves proposal');
 for (const [i, n] of ['A', 'B', 'C', 'D', 'E'].entries()) await call('POST', `/tournaments/${t.data.id}/teams`, events.accessToken, { name: `Team ${n}`, seed: i + 1 });
 const gen = (await call('POST', `/tournaments/${t.data.id}/generate`, events.accessToken, {})).data;
 ok(gen.status === 'ONGOING' && gen.matches.length === 7 && gen.matches.filter((m) => m.status === 'BYE').length === 3, 'bracket generated with byes', `${gen.matches.length} matches`);
@@ -184,7 +190,8 @@ ok((await call('POST', `/achievements/${ach.data.id}/verify`, coach.accessToken)
 const prof = (await call('GET', `/users/${anup.user.id}/profile`, anup.accessToken)).data;
 ok(prof.stats.checkIns > 0 && prof.clubs.length === 2, 'profile', JSON.stringify(prof.stats));
 ok((await call('GET', `/users/${peso.user.id}/profile`, anup.accessToken)).status === 403, "student can't view others' profile");
-ok((await call('PATCH', `/users/${anup.user.id}`, peso.accessToken, { role: 'ADMIN' })).status === 403, 'PESO cannot grant ADMIN');
+ok((await call('PATCH', `/users/${anup.user.id}`, peso.accessToken, { role: 'ADMIN' })).status === 400, 'roles cannot be set through PATCH /users');
+ok((await call('POST', '/rbac/assignments', peso.accessToken, { userId: anup.user.id, role: 'ADMIN', reason: 'smoke' })).status === 403, 'PESO cannot grant ADMIN');
 const verify2 = (await call('GET', '/audit/verify', peso.accessToken)).data;
 ok(verify2.valid && verify2.checked > verify.checked, 'audit chain still valid after activity', `${verify2.checked} entries`);
 
