@@ -234,7 +234,7 @@ export function ProjectorView({ sessionId, onExit }: { sessionId: string; onExit
                 </div>
                 <div className="text-right text-[11px] text-white/60 tabular">
                   <p>{fmtTime(r.checkedInAt)}</p>
-                  <p>{Math.round(r.distanceM)} m · ±{Math.round(r.accuracyM)} m</p>
+                  <p>{r.distanceM === null ? 'manual entry' : `${Math.round(r.distanceM)} m · ±${Math.round(r.accuracyM ?? 0)} m`}</p>
                 </div>
               </li>
             ))}

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useAuth, useUser } from '@/components/auth';
+import { ClubAnnouncements } from '@/components/club-extra';
 import { MembershipBadge } from '@/components/status';
 import { useToast } from '@/components/toast';
 import { Avatar, Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorState, PageHeader, Select, Skeleton, Tabs } from '@/components/ui';
@@ -25,7 +26,7 @@ export default function ClubDetailPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
 
-  const canRoster = can('clubs:roster');
+  const canRoster = !!club?.canManage;
   const members = useMemo(() => club?.members ?? [], [club]);
   const grouped = useMemo(
     () => ({
@@ -273,6 +274,9 @@ export default function ClubDetailPage() {
             )}
           </CardBody>
         </Card>
+      </div>
+      <div className="mt-6">
+        <ClubAnnouncements clubId={club.id} canPost={!!club.canManage && (club.coachId === user.id || can('club.manage') || can('club.announce'))} canRead={!!club.canManage || club.myMembership?.status === 'ACTIVE'} />
       </div>
     </div>
   );

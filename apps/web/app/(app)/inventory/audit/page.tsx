@@ -41,7 +41,7 @@ export default function AuditPage() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [verification, setVerification] = useState<AuditVerification | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const { data, error, isLoading, mutate } = useApi<AuditEntry[]>(can('audit:read') ? '/audit' : null, { entity, limit });
+  const { data, error, isLoading, mutate } = useApi<AuditEntry[]>(can('audit.view') ? '/audit' : null, { entity, limit });
 
   async function verify() {
     setVerifying(true);
@@ -57,7 +57,7 @@ export default function AuditPage() {
     }
   }
 
-  if (!can('audit:read')) {
+  if (!can('audit.view')) {
     return <EmptyState icon={<ShieldAlert className="size-5" />} title="Restricted" description="The audit ledger is available to the Sports Officer and institute leadership." />;
   }
 

@@ -10,6 +10,7 @@ import { QrScanner } from '@/components/qr-scanner';
 import { BookingStatusBadge } from '@/components/status';
 import { useToast } from '@/components/toast';
 import {
+  Modal,
   Badge,
   Button,
   Card,
@@ -106,6 +107,7 @@ function MyBookings() {
   const toast = useToast();
   const { data, error, isLoading, mutate } = useApi<Booking[]>('/bookings', { scope: 'mine' });
   const [pass, setPass] = useState<Booking | null>(null);
+  const [moving, setMoving] = useState<Booking | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const { upcoming, past } = useMemo(() => {
@@ -164,6 +166,11 @@ function MyBookings() {
                     Pass
                   </Button>
                 )}
+                {new Date(b.start).getTime() > Date.now() && (
+                  <Button size="sm" variant="ghost" onClick={() => setMoving(b)}>
+                    Reschedule
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" loading={busyId === b.id} onClick={() => cancel(b)}>
                   Cancel
                 </Button>
@@ -181,7 +188,62 @@ function MyBookings() {
         </section>
       )}
       <PassModal booking={pass} onClose={() => setPass(null)} />
+      <RescheduleModal booking={moving} onClose={() => setMoving(null)} />
     </div>
+  );
+}
+
+/** Same facility, new slot; the API re-checks hours, capacity, conflicts and (if needed) re-queues for approval. */
+function RescheduleModal({ booking, onClose }: { booking: Booking | null; onClose: () => void }) {
+  const toast = useToast();
+  const [date, setDate] = useState(todayIST(1));
+  const [time, setTime] = useState('17:00');
+  const [busy, setBusy] = useState(false);
+  const minutes = booking ? Math.round((new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60000) : 60;
+
+  async function save() {
+    if (!booking) return;
+    const start = new Date(`${date}T${time}:00+05:30`);
+    if (Number.isNaN(start.getTime())) return toast.warning('Pick a valid date and time');
+    setBusy(true);
+    try {
+      const res = await api.post<Booking>(`/bookings/${booking.id}/reschedule`, { start: start.toISOString(), end: new Date(start.getTime() + minutes * 60000).toISOString() });
+      toast.success('Booking moved', res.status === 'PENDING' ? 'The new slot needs approval again.' : 'Your pass stays valid for the new slot.');
+      await revalidate('/bookings', '/facilities');
+      onClose();
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={!!booking}
+      onClose={onClose}
+      title="Reschedule booking"
+      description={booking ? `${booking.facility?.name ?? 'Facility'} · same duration (${minutes} min), up to 3 times` : undefined}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={busy} onClick={save}>
+            Move booking
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Date" htmlFor="rs-date">
+          <Input id="rs-date" type="date" value={date} min={todayIST(0)} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field label="Start (IST)" htmlFor="rs-time">
+          <Input id="rs-time" type="time" step={900} value={time} onChange={(e) => setTime(e.target.value)} />
+        </Field>
+      </div>
+    </Modal>
   );
 }
 
@@ -203,10 +265,11 @@ function AllBookings() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function cancel(b: Booking) {
-    if (!window.confirm('Cancel this booking on behalf of the requester?')) return;
+    const reason = window.prompt(`Reason for cancelling ${b.user?.name ?? 'this'}'s booking (they will be notified):`);
+    if (!reason || reason.trim().length < 3) return;
     setBusyId(b.id);
     try {
-      await api.post(`/bookings/${b.id}/cancel`);
+      await api.post(`/bookings/${b.id}/cancel`, { reason: reason.trim() });
       toast.success('Booking cancelled');
       await revalidate('/bookings');
     } catch (err) {
@@ -257,7 +320,7 @@ function AllBookings() {
           bookings={[...data].sort((a, b) => a.start.localeCompare(b.start))}
           showUser
           actions={
-            can('bookings:approve')
+            can('booking.cancel')
               ? (b) =>
                   ['PENDING', 'APPROVED'].includes(b.status) && new Date(b.end).getTime() > Date.now() ? (
                     <Button size="sm" variant="ghost" loading={busyId === b.id} onClick={() => cancel(b)}>
@@ -377,12 +440,12 @@ function GateCheckIn() {
 export default function BookingsPage() {
   const { can } = useAuth();
   const [tab, setTab] = useState<Tab>('mine');
-  const { data: pending } = useApi<Booking[]>(can('bookings:approve') ? '/bookings' : null, { scope: 'all', status: 'PENDING' });
+  const { data: pending } = useApi<Booking[]>(can('booking.approve') ? '/bookings' : null, { scope: 'all', status: 'PENDING' });
 
   const tabs: { value: Tab; label: string; count?: number }[] = [{ value: 'mine', label: 'My bookings' }];
-  if (can('bookings:approve')) tabs.push({ value: 'approvals', label: 'Approvals', count: pending?.length });
-  if (can('bookings:read_all')) tabs.push({ value: 'all', label: 'All bookings' });
-  if (can('bookings:checkin')) tabs.push({ value: 'gate', label: 'Gate check-in' });
+  if (can('booking.approve')) tabs.push({ value: 'approvals', label: 'Approvals', count: pending?.length });
+  if (can('booking.view_all')) tabs.push({ value: 'all', label: 'All bookings' });
+  if (can('booking.verify')) tabs.push({ value: 'gate', label: 'Gate check-in' });
 
   return (
     <div>

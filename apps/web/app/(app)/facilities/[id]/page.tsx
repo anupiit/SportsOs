@@ -56,7 +56,7 @@ export default function FacilityDetailPage() {
   const myClubs = useMemo(
     () =>
       (clubs ?? []).filter(
-        (c) => c.myMembership?.status === 'ACTIVE' || c.coachId === user.id || can('clubs:manage'),
+        (c) => c.myMembership?.role === 'CAPTAIN' || c.myMembership?.role === 'VICE_CAPTAIN' || c.coachId === user.id || c.canManage,
       ),
     [clubs, user.id, can],
   );
@@ -64,8 +64,8 @@ export default function FacilityDetailPage() {
   const typeOptions = useMemo(() => {
     const opts: BookingType[] = ['CASUAL'];
     if (myClubs.length) opts.push('CLUB_PRACTICE');
-    if (can('events:manage')) opts.push('EVENT');
-    if (can('facilities:status')) opts.push('MAINTENANCE');
+    if (can('event.create') || can('booking.manage')) opts.push('EVENT');
+    if (can('facility.update_status')) opts.push('MAINTENANCE');
     return opts;
   }, [myClubs.length, can]);
 
@@ -166,12 +166,12 @@ export default function FacilityDetailPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              {can('facilities:status') && (
+              {can('facility.update_status') && (
                 <Button icon={<Wrench className="size-3.5" />} onClick={() => setStatusOpen(true)}>
                   Update status
                 </Button>
               )}
-              {can('facilities:manage') && (
+              {can('facility.manage') && (
                 <Button icon={<Pencil className="size-3.5" />} onClick={() => setEditing(true)}>
                   Edit
                 </Button>

@@ -635,6 +635,7 @@ export function StatTile({
 export function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
   const sizes = { sm: 'size-7 text-[11px]', md: 'size-9 text-xs', lg: 'size-14 text-lg' };
   const text = name
+    .replace(/^\[[A-Z]+\]\s*/, '') // "[DEMO] …" label
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)

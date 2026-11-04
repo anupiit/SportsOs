@@ -87,7 +87,7 @@ export function IssueStatusBadge({ status }: { status: IssueStatus }) {
   );
 }
 
-const tournament: Record<TournamentStatus, Tone> = { DRAFT: 'neutral', ONGOING: 'blue', COMPLETED: 'green' };
+const tournament: Record<TournamentStatus, Tone> = { PROPOSED: 'terracotta', REJECTED: 'red', DRAFT: 'neutral', ONGOING: 'blue', COMPLETED: 'green' };
 
 export function TournamentStatusBadge({ status }: { status: TournamentStatus }) {
   return <Badge tone={tournament[status]}>{humanize(status)}</Badge>;

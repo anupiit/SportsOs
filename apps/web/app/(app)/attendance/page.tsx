@@ -22,6 +22,7 @@ import {
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ProjectorView } from '@/components/attendance/projector';
 import { useAuth, useUser } from '@/components/auth';
+import { AttendanceCorrections } from '@/components/club-extra';
 import { SessionBadge } from '@/components/status';
 import { useToast } from '@/components/toast';
 import {
@@ -58,7 +59,7 @@ function StartSessionCard({ onStarted }: { onStarted: (s: AttendanceSession) => 
   const { data: facilities } = useApi<Facility[]>('/facilities');
   const { data: clubs } = useApi<Club[]>('/clubs');
   const myClubs = useMemo(
-    () => (clubs ?? []).filter((c) => c.coachId === user.id || can('clubs:roster')),
+    () => (clubs ?? []).filter((c) => c.coachId === user.id || c.canManage),
     [clubs, user.id, can],
   );
   const openFacilities = (facilities ?? []).filter((f) => f.status === 'OPEN');
@@ -151,7 +152,8 @@ function StartSessionCard({ onStarted }: { onStarted: (s: AttendanceSession) => 
 }
 
 function SessionRecordsModal({ sessionId, onClose }: { sessionId: string | null; onClose: () => void }) {
-  const { data, isLoading } = useApi<AttendanceSession>(sessionId ? `/attendance/sessions/${sessionId}` : null);
+  const { can } = useAuth();
+  const { data, isLoading, mutate } = useApi<AttendanceSession>(sessionId ? `/attendance/sessions/${sessionId}` : null);
   return (
     <Modal open={!!sessionId} onClose={onClose} title={data?.title ?? 'Session roster'} description={data ? `${data.facility?.name ?? ''} · ${fmtDateTime(data.startsAt)}` : undefined} size="lg">
       {isLoading || !data ? (
@@ -176,14 +178,15 @@ function SessionRecordsModal({ sessionId, onClose }: { sessionId: string | null;
                   <td className="font-medium text-text">{r.user?.name ?? '—'}</td>
                   <td className="tabular">{r.user?.admissionNo ?? '—'}</td>
                   <td className="tabular">{fmtTime(r.checkedInAt)}</td>
-                  <td className="num">{Math.round(r.distanceM)} m</td>
-                  <td className="num">±{Math.round(r.accuracyM)} m</td>
+                  <td className="num">{r.distanceM === null ? <span className="text-muted">manual</span> : `${Math.round(r.distanceM)} m`}</td>
+                  <td className="num">{r.accuracyM === null ? '—' : `±${Math.round(r.accuracyM)} m`}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      {data && can('attendance.manage') && <AttendanceCorrections sessionId={data.id} onChanged={() => mutate()} />}
     </Modal>
   );
 }
@@ -492,8 +495,8 @@ function HistoryView() {
                 <tr key={r.id}>
                   <td className="font-medium text-text">{r.session?.title ?? 'Session'}</td>
                   <td className="whitespace-nowrap">{fmtDateTime(r.checkedInAt)}</td>
-                  <td className="num">{Math.round(r.distanceM)} m</td>
-                  <td className="num">±{Math.round(r.accuracyM)} m</td>
+                  <td className="num">{r.distanceM === null ? <span className="text-muted">manual</span> : `${Math.round(r.distanceM)} m`}</td>
+                  <td className="num">{r.accuracyM === null ? '—' : `±${Math.round(r.accuracyM)} m`}</td>
                 </tr>
               ))}
             </tbody>
@@ -508,7 +511,7 @@ function HistoryView() {
 
 export default function AttendancePage() {
   const { can } = useAuth();
-  const manager = can('attendance:manage');
+  const manager = can('attendance.manage');
   const [tab, setTab] = useState<Tab>(manager ? 'run' : 'checkin');
   const [projecting, setProjecting] = useState<string | null>(null);
   const [linkedSession, setLinkedSession] = useState<string | null>(null);

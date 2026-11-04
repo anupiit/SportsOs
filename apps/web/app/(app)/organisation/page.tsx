@@ -1,12 +1,13 @@
 'use client';
 
-import { ROLE_INFO, ROLE_PERMISSIONS, ROLES, type Role } from '@sportsos/shared';
+import { DEFAULT_ROLE_PERMISSIONS, PERMISSION_INFO, PRIVILEGED_ROLES, ROLE_INFO, ROLES, type Permission, type RbacMatrix, type Role } from '@sportsos/shared';
 import clsx from 'clsx';
 import { KeyRound } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { useUser } from '@/components/auth';
+import { useAuth, useUser } from '@/components/auth';
 import { Badge, Card, CardBody, CardHeader, PageHeader } from '@/components/ui';
 import { humanize } from '@/lib/format';
+import { useApi } from '@/lib/hooks';
 
 function childrenMap(): Map<Role, Role[]> {
   const map = new Map<Role, Role[]>();
@@ -55,7 +56,9 @@ const VLine = () => <div className="mx-auto h-4 w-px bg-border-strong" aria-hidd
 
 export default function OrganisationPage() {
   const me = useUser();
+  const { heldRoles } = useAuth();
   const [selected, setSelected] = useState<Role>(me.role);
+  const { data: matrix } = useApi<RbacMatrix>('/rbac/matrix');
   const kids = useMemo(childrenMap, []);
 
   // Walk the single-child chain from the root to the first branching node.
@@ -71,13 +74,15 @@ export default function OrganisationPage() {
 
   const sel = (r: Role) => setSelected(r);
   const info = ROLE_INFO[selected];
-  const perms = ROLE_PERMISSIONS[selected];
+  const live = matrix?.roles.find((r) => r.role === selected);
+  const perms: Permission[] = live?.permissions ?? DEFAULT_ROLE_PERMISSIONS[selected];
+  const customised = !!live && (live.permissions.length !== live.defaults.length || live.permissions.some((p) => !live.defaults.includes(p)));
 
   function Subtree({ role, depth }: { role: Role; depth: number }) {
     const children = kids.get(role) ?? [];
     return (
       <div className={clsx(depth > 0 && 'border-l border-border-strong pl-3')}>
-        <Node role={role} selected={selected === role} mine={me.role === role} onSelect={sel} />
+        <Node role={role} selected={selected === role} mine={heldRoles.includes(role)} onSelect={sel} />
         {children.length > 0 && (
           <div className="mt-2 space-y-2">
             {children.map((c) => (
@@ -94,7 +99,7 @@ export default function OrganisationPage() {
       <PageHeader
         eyebrow="Stakeholder hierarchy"
         title="SportsOS — a unified digital backbone"
-        description="Every node in the institute's sports governance structure is a SportsOS role with its own view and permissions. Select a role to see what it can do."
+        description="Every node in the institute's sports governance structure is a SportsOS role with its own view and permissions. A person can hold several roles, and seniority on this chart grants no permissions by itself: each role's set is assigned explicitly. Select a role to see what it can do."
       />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
@@ -103,7 +108,7 @@ export default function OrganisationPage() {
               {chain.map((r, i) => (
                 <div key={r}>
                   {i > 0 && <VLine />}
-                  <Node role={r} selected={selected === r} mine={me.role === r} onSelect={sel} strong />
+                  <Node role={r} selected={selected === r} mine={heldRoles.includes(r)} onSelect={sel} strong />
                 </div>
               ))}
             </div>
@@ -113,7 +118,7 @@ export default function OrganisationPage() {
                 const subs = kids.get(b) ?? [];
                 return (
                   <div key={b}>
-                    <Node role={b} selected={selected === b} mine={me.role === b} onSelect={sel} />
+                    <Node role={b} selected={selected === b} mine={heldRoles.includes(b)} onSelect={sel} />
                     {subs.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {subs.map((s) => (
@@ -135,17 +140,17 @@ export default function OrganisationPage() {
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div>
                     <p className="mb-1 text-center text-[11px] text-muted italic">Representational access</p>
-                    <Node role="CLUB_MEMBER" selected={selected === 'CLUB_MEMBER'} mine={me.role === 'CLUB_MEMBER'} onSelect={sel} />
+                    <Node role="CLUB_MEMBER" selected={selected === 'CLUB_MEMBER'} mine={heldRoles.includes('CLUB_MEMBER')} onSelect={sel} />
                   </div>
                   <div>
                     <p className="mb-1 text-center text-[11px] text-muted italic">Casual booking access</p>
-                    <Node role="STUDENT" selected={selected === 'STUDENT'} mine={me.role === 'STUDENT'} onSelect={sel} />
+                    <Node role="STUDENT" selected={selected === 'STUDENT'} mine={heldRoles.includes('STUDENT')} onSelect={sel} />
                   </div>
                 </div>
               </section>
               <section className="rounded-xl border border-dashed border-border p-4">
                 <h3 className="mb-3 text-center text-sm font-semibold text-text">Platform</h3>
-                <Node role="ADMIN" selected={selected === 'ADMIN'} mine={me.role === 'ADMIN'} onSelect={sel} />
+                <Node role="ADMIN" selected={selected === 'ADMIN'} mine={heldRoles.includes('ADMIN')} onSelect={sel} />
               </section>
             </div>
           </CardBody>
@@ -157,7 +162,9 @@ export default function OrganisationPage() {
             <div className="flex flex-wrap gap-1.5">
               <Badge tone="navy">{humanize(info.tier)}</Badge>
               {info.reportsTo && <Badge tone="neutral">Reports to {ROLE_INFO[info.reportsTo].label}</Badge>}
-              {selected === me.role && <Badge tone="terracotta">Your role</Badge>}
+              {heldRoles.includes(selected) && <Badge tone="terracotta">You hold this role</Badge>}
+              {PRIVILEGED_ROLES.includes(selected) && <Badge tone="amber">Privileged: two-person approval</Badge>}
+              <Badge tone={matrix ? 'green' : 'neutral'}>{matrix ? (customised ? 'Live matrix (customised)' : 'Live matrix (defaults)') : 'Default matrix'}</Badge>
             </div>
             <div>
               <p className="mb-2 text-xs font-semibold text-text-2">
@@ -166,7 +173,7 @@ export default function OrganisationPage() {
               {perms.length ? (
                 <ul className="flex flex-wrap gap-1.5">
                   {perms.map((p) => (
-                    <li key={p}>
+                    <li key={p} title={PERMISSION_INFO[p]}>
                       <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-text-2">{p}</code>
                     </li>
                   ))}

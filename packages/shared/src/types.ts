@@ -1,5 +1,6 @@
 import type { Permission } from './permissions';
 import type { Role } from './roles';
+import type { ScopeType } from './permissions';
 
 /**
  * Wire types returned by the SportsOS REST API. Dates are ISO-8601 strings.
@@ -19,10 +20,10 @@ export type SessionStatus = 'ACTIVE' | 'CLOSED';
 export type AttemptOutcome = 'ACCEPTED' | 'BAD_OTP' | 'OUT_OF_GEOFENCE' | 'LOW_ACCURACY' | 'DUPLICATE' | 'DEVICE_REUSED' | 'SESSION_CLOSED' | 'NOT_ELIGIBLE';
 export type IssueStatus = 'ISSUED' | 'RETURNED' | 'OVERDUE' | 'LOST';
 export type TournamentFormat = 'SINGLE_ELIMINATION' | 'ROUND_ROBIN';
-export type TournamentStatus = 'DRAFT' | 'ONGOING' | 'COMPLETED';
+export type TournamentStatus = 'PROPOSED' | 'REJECTED' | 'DRAFT' | 'ONGOING' | 'COMPLETED';
 export type MatchStatus = 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'BYE';
 export type NotificationType = 'INFO' | 'ALERT' | 'APPROVAL' | 'REMINDER';
-export type ComplaintCategory = 'FACILITY' | 'EQUIPMENT' | 'STAFF' | 'BOOKING' | 'OTHER';
+export type ComplaintCategory = 'FACILITY' | 'EQUIPMENT' | 'STAFF' | 'BOOKING' | 'SECURITY' | 'MAINTENANCE' | 'OTHER';
 export type ComplaintStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 export type AchievementLevel = 'HOSTEL' | 'INSTITUTE' | 'INTER_IIT' | 'STATE' | 'NATIONAL' | 'INTERNATIONAL';
@@ -38,20 +39,175 @@ export interface UserSummary {
 }
 
 export interface User extends UserSummary {
-  phone: string | null;
+  /** absent in directory views without user.update */
+  phone?: string | null;
   isActive: boolean;
+  /** synthetic seed/test account */
+  isDemo?: boolean;
   createdAt: ISODate;
 }
 
-export interface AuthResponse {
-  accessToken: string;
-  user: User;
-  permissions: Permission[];
+export interface SessionRole {
+  assignmentId: string;
+  role: Role;
+  scopeType: ScopeType;
+  scopeId: string;
+  validUntil: ISODate | null;
 }
 
 export interface MeResponse {
   user: User;
+  /** permissions in effect for the active role (or all held roles) */
   permissions: Permission[];
+  activeRole: Role | null;
+  heldRoles: Role[];
+  roles: SessionRole[];
+}
+
+export interface AuthResponse extends MeResponse {
+  accessToken: string;
+}
+
+export type AssignmentStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'REVOKED' | 'EXPIRED';
+
+export interface RoleAssignment {
+  id: string;
+  userId: string;
+  user?: UserSummary;
+  role: Role;
+  scopeType: ScopeType;
+  scopeId: string;
+  status: AssignmentStatus;
+  validFrom: ISODate;
+  validUntil: ISODate | null;
+  reason: string | null;
+  requestedBy?: { id: string; name: string } | null;
+  decidedBy?: { id: string; name: string } | null;
+  decidedAt: ISODate | null;
+  decisionNote: string | null;
+  revokedBy?: { id: string; name: string } | null;
+  revokedAt: ISODate | null;
+  revokeReason: string | null;
+  createdAt: ISODate;
+}
+
+export interface RbacMatrix {
+  roles: { role: Role; permissions: Permission[]; defaults: Permission[] }[];
+  permissions: { key: Permission; description: string }[];
+}
+
+export type DataStatus = 'VERIFIED' | 'PENDING_VERIFICATION' | 'EXPIRED' | 'UNVERIFIED';
+export type InstitutionalKind = 'PERSONNEL' | 'OFFICE_BEARER' | 'FACILITY' | 'SPORT';
+
+export interface InstitutionalRecord {
+  id: string;
+  kind: InstitutionalKind;
+  name: string;
+  designation: string | null;
+  roleHint: Role | null;
+  department: string | null;
+  email: string | null;
+  phone?: string | null;
+  sport: string | null;
+  hostel: string | null;
+  details: Record<string, string>;
+  sourceUrl: string | null;
+  sourceDocument: string | null;
+  verifiedAt: ISODate | null;
+  validUntil: ISODate | null;
+  dataStatus: DataStatus;
+  linkedUserId?: string | null;
+  updatedAt: ISODate;
+}
+
+export type ImportAction = 'CREATE' | 'UPDATE' | 'UNCHANGED' | 'SKIP' | 'ERROR';
+
+export interface ImportBatch {
+  id: string;
+  kind: InstitutionalKind;
+  filename: string;
+  sourceUrl: string | null;
+  sourceDocument: string | null;
+  mode: 'CREATE_ONLY' | 'UPSERT';
+  status: 'PREVIEWED' | 'COMMITTED' | 'ROLLED_BACK' | 'FAILED';
+  totalRows: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  failed: number;
+  createdBy?: { id: string; name: string };
+  committedAt: ISODate | null;
+  rolledBackAt: ISODate | null;
+  createdAt: ISODate;
+  items?: { id: string; rowNumber: number; action: ImportAction; message: string | null; after: Record<string, unknown> | null; before: Record<string, unknown> | null }[];
+}
+
+export type AnnouncementStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  clubId: string | null;
+  audienceRoles: Role[];
+  authorId: string;
+  author?: { id: string; name: string };
+  status: AnnouncementStatus;
+  reviewedBy?: { id: string; name: string } | null;
+  reviewNote: string | null;
+  publishedAt: ISODate | null;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE';
+
+export interface OperationalTask {
+  id: string;
+  title: string;
+  description: string | null;
+  kind: 'MAINTENANCE' | 'OPERATIONS' | 'SECURITY';
+  facility?: { id: string; name: string; code: string } | null;
+  assignee?: UserSummary;
+  createdBy?: { id: string; name: string };
+  status: TaskStatus;
+  dueAt: ISODate | null;
+  note: string | null;
+  completedAt: ISODate | null;
+  createdAt: ISODate;
+}
+
+export interface EquipmentRequest {
+  id: string;
+  requester?: UserSummary;
+  club?: { id: string; name: string } | null;
+  equipment?: { id: string; name: string; availableQty: number } | null;
+  equipmentId: string | null;
+  itemName: string;
+  quantity: number;
+  neededBy: ISODate | null;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'FULFILLED' | 'CANCELLED';
+  decidedBy?: { id: string; name: string } | null;
+  decisionNote: string | null;
+  createdAt: ISODate;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  type: 'INITIAL' | 'RESTOCK' | 'ISSUE' | 'RETURN' | 'DAMAGE_REPORT' | 'REPAIR' | 'LOSS' | 'WRITE_OFF' | 'ADJUSTMENT';
+  quantity: number;
+  availableDelta: number;
+  damagedDelta: number;
+  totalDelta: number;
+  balanceAvailable: number;
+  balanceDamaged: number;
+  balanceTotal: number;
+  note: string | null;
+  actor?: { id: string; name: string };
+  equipment?: { id: string; name: string };
+  createdAt: ISODate;
 }
 
 // ---------------------------------------------------------------- facilities & bookings
@@ -71,6 +227,7 @@ export interface Facility {
   slotMinutes: number;
   capacity: number;
   requiresApproval: boolean;
+  isDemo?: boolean;
   updatedAt: ISODate;
 }
 
@@ -89,6 +246,8 @@ export interface Booking {
   status: BookingStatus;
   participants: number;
   rejectionReason: string | null;
+  cancelReason?: string | null;
+  rescheduleCount?: number;
   checkedInAt: ISODate | null;
   createdAt: ISODate;
 }
@@ -133,6 +292,9 @@ export interface Club {
   memberCount: number;
   myMembership?: ClubMembership | null;
   members?: ClubMembership[];
+  /** server-computed: may this viewer manage the roster / announcements */
+  canManage?: boolean;
+  isDemo?: boolean;
   createdAt: ISODate;
 }
 
@@ -168,10 +330,12 @@ export interface AttendanceRecord {
   userId: string;
   user?: UserSummary;
   checkedInAt: ISODate;
-  latitude: number;
-  longitude: number;
-  accuracyM: number;
-  distanceM: number;
+  /** null for MANUAL corrections */
+  latitude: number | null;
+  longitude: number | null;
+  accuracyM: number | null;
+  distanceM: number | null;
+  method?: 'VERIFIED' | 'MANUAL';
 }
 
 export interface CheckInRequest {
@@ -256,6 +420,8 @@ export interface Team {
   name: string;
   hostel: string | null;
   seed: number | null;
+  registeredById?: string | null;
+  members?: { id: string; userId: string; user?: { id: string; name: string; hostel: string | null } }[];
 }
 
 export interface Match {
@@ -301,6 +467,9 @@ export interface Tournament {
   organizerId: string;
   teamCount: number;
   championId: string | null;
+  approvedById?: string | null;
+  reviewNote?: string | null;
+  isDemo?: boolean;
   teams?: Team[];
   matches?: Match[];
   standings?: StandingRow[];
@@ -334,6 +503,12 @@ export interface Complaint {
   assignedToId: string | null;
   assignedTo?: UserSummary | null;
   resolution: string | null;
+  escalated?: boolean;
+  escalationNote?: string | null;
+  resolvedAt?: ISODate | null;
+  closedAt?: ISODate | null;
+  reopenCount?: number;
+  attachments?: { id: string; filename: string; mimeType: string; size: number; createdAt: ISODate }[];
   createdAt: ISODate;
   updatedAt: ISODate;
 }

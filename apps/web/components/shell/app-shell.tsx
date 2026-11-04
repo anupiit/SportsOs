@@ -1,12 +1,13 @@
 'use client';
 
-import { roleLabel } from '@sportsos/shared';
+import { roleLabel, type Role } from '@sportsos/shared';
 import clsx from 'clsx';
 import { Bell, ChevronDown, LogOut, Menu, Monitor, Moon, Sun, User as UserIcon, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth';
+import { useToast } from '@/components/toast';
 import { Avatar, Spinner } from '@/components/ui';
 import { useApi } from '@/lib/hooks';
 import { NAV } from './nav';
@@ -48,7 +49,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <div className="flex-1 overflow-y-auto px-3 pb-6">
         {NAV.map((section) => {
-          const items = section.items.filter((i) => !i.permission || can(i.permission));
+          const items = section.items.filter((i) => !i.anyOf || i.anyOf.some((p) => can(p)));
           if (!items.length) return null;
           return (
             <div key={section.title} className="mt-5 first:mt-2">
@@ -87,6 +88,46 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         Sports &amp; Physical Education Cell
       </div>
     </nav>
+  );
+}
+
+/**
+ * Lets a user who holds several roles act as one of them. Narrowing is enforced
+ * by the API (X-Active-Role is checked against the user's real assignments).
+ */
+function RoleSwitcher() {
+  const { heldRoles, activeRole, setActiveRole } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (heldRoles.length < 2) return null;
+  return (
+    <label className="hidden items-center gap-1.5 text-xs text-muted sm:flex">
+      <span>Acting as</span>
+      <select
+        className="h-8 rounded-lg border border-border bg-surface px-2 text-xs text-text"
+        value={activeRole ?? ''}
+        disabled={busy}
+        aria-label="Active role"
+        onChange={async (e) => {
+          setBusy(true);
+          try {
+            await setActiveRole((e.target.value || null) as Role | null);
+            toast.success(e.target.value ? `Acting as ${roleLabel(e.target.value as Role)}` : 'Using all of your roles');
+          } catch (err) {
+            toast.error(err);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <option value="">All my roles</option>
+        {heldRoles.map((r) => (
+          <option key={r} value={r}>
+            {roleLabel(r)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -144,7 +185,8 @@ function ThemeSwitch() {
 }
 
 function UserMenu() {
-  const { user, logout } = useAuth();
+  const { user, logout, activeRole, heldRoles } = useAuth();
+  const shownRole = activeRole ?? user?.role;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -176,7 +218,7 @@ function UserMenu() {
         <Avatar name={user.name} size="sm" />
         <span className="hidden text-left leading-tight md:block">
           <span className="block max-w-[160px] truncate text-sm font-medium text-text">{user.name}</span>
-          <span className="block max-w-[160px] truncate text-[11px] text-muted">{roleLabel(user.role)}</span>
+          <span className="block max-w-[160px] truncate text-[11px] text-muted">{shownRole ? roleLabel(shownRole) : ''}</span>
         </span>
         <ChevronDown className="size-4 text-muted" />
       </button>
@@ -188,7 +230,8 @@ function UserMenu() {
           <div className="border-b border-border px-2 pt-1 pb-2.5">
             <p className="truncate text-sm font-semibold text-text">{user.name}</p>
             <p className="truncate text-xs text-muted">{user.email}</p>
-            <p className="mt-1 text-[11px] font-medium text-accent-ink">{roleLabel(user.role)}</p>
+            <p className="mt-1 text-[11px] font-medium text-accent-ink">{heldRoles.map(roleLabel).join(' · ')}</p>
+            {user.isDemo && <p className="mt-1 text-[10px] font-semibold tracking-wide text-warn-ink uppercase">Demo account</p>}
           </div>
           <div className="py-2">
             <ThemeSwitch />
@@ -279,6 +322,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="text-sm font-bold text-text">SportsOS</span>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
+            <RoleSwitcher />
             <NotificationBell />
             <UserMenu />
           </div>

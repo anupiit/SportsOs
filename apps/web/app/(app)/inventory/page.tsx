@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useAuth } from '@/components/auth';
 import { IssueModal, ItemDrawer, NewItemModal, ReturnModal } from '@/components/inventory';
+import { RequestsPanel } from '@/components/inventory-extra';
 import { IssueStatusBadge } from '@/components/status';
 import {
   Badge,
@@ -25,7 +26,7 @@ import {
 import { fmtDate, fmtRelative, humanize } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 
-type Tab = 'items' | 'issues' | 'mine';
+type Tab = 'items' | 'issues' | 'mine' | 'requests';
 
 function AlertsPanel({ onReturn }: { onReturn: (i: EquipmentIssue) => void }) {
   const { data, isLoading } = useApi<InventoryAlerts>('/inventory/alerts', undefined, { refreshInterval: 60000 });
@@ -164,8 +165,8 @@ function IssuesTable({ scope, onReturn, canIssue }: { scope: 'all' | 'mine'; onR
 
 export default function InventoryPage() {
   const { can } = useAuth();
-  const canIssue = can('inventory:issue');
-  const canManage = can('inventory:manage');
+  const canIssue = can('inventory.issue');
+  const canManage = can('inventory.update');
   const [tab, setTab] = useState<Tab>('items');
   const [q, setQ] = useState('');
   const [sport, setSport] = useState('');
@@ -188,6 +189,7 @@ export default function InventoryPage() {
     { value: 'items', label: 'Equipment' },
     ...(canIssue ? [{ value: 'issues' as Tab, label: 'Issues & returns' }] : []),
     { value: 'mine', label: 'My borrowed' },
+    ...(can('inventory.request') || can('inventory.approve_request') ? [{ value: 'requests' as Tab, label: 'Requests' }] : []),
   ];
 
   return (
@@ -198,12 +200,12 @@ export default function InventoryPage() {
         description="QR-labelled equipment with live stock, issue/return logs and automated low-stock alerts."
         actions={
           <>
-            {can('audit:read') && (
+            {can('audit.view') && (
               <Link href="/inventory/audit">
                 <Button icon={<ScrollText className="size-4" />}>Audit ledger</Button>
               </Link>
             )}
-            {canManage && (
+            {can('inventory.create') && (
               <Button icon={<PackagePlus className="size-4" />} onClick={() => setCreating(true)}>
                 New item
               </Button>
@@ -301,6 +303,7 @@ export default function InventoryPage() {
           )}
           {tab === 'issues' && canIssue && <IssuesTable scope="all" onReturn={setReturning} canIssue={canIssue} />}
           {tab === 'mine' && <IssuesTable scope="mine" onReturn={setReturning} canIssue={false} />}
+          {tab === 'requests' && <RequestsPanel items={all ?? []} />}
         </CardBody>
       </Card>
 

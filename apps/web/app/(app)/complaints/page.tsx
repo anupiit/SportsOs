@@ -10,7 +10,7 @@ import type {
   User,
 } from '@sportsos/shared';
 import { roleLabel } from '@sportsos/shared';
-import { MessageSquareWarning, Plus, Settings2 } from 'lucide-react';
+import { ArrowUpCircle, Download, MessageSquareWarning, Paperclip, Plus, RotateCcw, Settings2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth, useUser } from '@/components/auth';
 import { ComplaintStatusBadge, PriorityBadge } from '@/components/status';
@@ -30,7 +30,7 @@ import {
   SkeletonRows,
   Textarea,
 } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, downloadFile } from '@/lib/api';
 import { COMPLAINT_CATEGORY_LABEL, PRIORITY_LABEL } from '@/lib/constants';
 import { fmtRelative, humanize } from '@/lib/format';
 import { revalidate, useApi } from '@/lib/hooks';
@@ -148,7 +148,7 @@ function ManageModal({ complaint, onClose }: { complaint: Complaint | null; onCl
   const toast = useToast();
   const me = useUser();
   const { can } = useAuth();
-  const { data: users } = useApi<User[]>(complaint && can('users:read') ? '/users' : null);
+  const { data: users } = useApi<User[]>(complaint && can('user.view') ? '/users' : null);
   const staff = (users ?? []).filter((u) => STAFF_ROLES.includes(u.role) && u.isActive);
   const [status, setStatus] = useState<ComplaintStatus>('OPEN');
   const [priority, setPriority] = useState<Priority>('MEDIUM');
@@ -164,17 +164,21 @@ function ManageModal({ complaint, onClose }: { complaint: Complaint | null; onCl
     setResolution(complaint.resolution ?? '');
   }, [complaint]);
 
+  const canAssign = can('complaint.assign');
+  const canWork = !!complaint && canWorkOn(complaint, me.id, can);
+
   async function save() {
     if (!complaint) return;
-    if ((status === 'RESOLVED' || status === 'CLOSED') && !resolution.trim()) return toast.warning('Describe the resolution before closing');
+    if (status === 'RESOLVED' && !resolution.trim()) return toast.warning('Describe the resolution before resolving');
+    const body: Record<string, unknown> = {};
+    if (canAssign && priority !== complaint.priority) body.priority = priority;
+    if (canAssign && assignedToId && assignedToId !== complaint.assignedToId) body.assignedToId = assignedToId;
+    if (canWork && status !== complaint.status) body.status = status;
+    if (canWork && resolution.trim() && resolution.trim() !== (complaint.resolution ?? '')) body.resolution = resolution.trim();
+    if (!Object.keys(body).length) return onClose();
     setBusy(true);
     try {
-      await api.patch(`/complaints/${complaint.id}`, {
-        status,
-        priority,
-        assignedToId: assignedToId || undefined,
-        resolution: resolution.trim() || undefined,
-      });
+      await api.patch(`/complaints/${complaint.id}`, body);
       toast.success('Complaint updated');
       await revalidate('/complaints', '/analytics');
       onClose();
@@ -193,10 +197,20 @@ function ManageModal({ complaint, onClose }: { complaint: Complaint | null; onCl
       description={complaint?.subject}
       footer={
         <>
+          {complaint && can('complaint.escalate') && !complaint.escalated && (complaint.status === 'OPEN' || complaint.status === 'IN_PROGRESS') && (
+            <Button variant="ghost" icon={<ArrowUpCircle className="size-4" />} onClick={() => complaintAction(complaint, 'escalate', toast).then((ok) => ok && onClose())}>
+              Escalate
+            </Button>
+          )}
+          {complaint && can('complaint.close') && complaint.status !== 'CLOSED' && (
+            <Button variant="ghost" onClick={() => complaintAction(complaint, 'close', toast).then((ok) => ok && onClose())}>
+              Close
+            </Button>
+          )}
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" loading={busy} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={save} disabled={!canAssign && !canWork}>
             Save
           </Button>
         </>
@@ -204,11 +218,12 @@ function ManageModal({ complaint, onClose }: { complaint: Complaint | null; onCl
     >
       {complaint && (
         <div className="space-y-4">
+          {complaint.escalated && <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn-ink">Escalated to leadership{complaint.escalationNote ? `: ${complaint.escalationNote}` : ''}</p>}
           <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-2">{complaint.description}</p>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Status" htmlFor="m-status">
-              <Select id="m-status" value={status} onChange={(e) => setStatus(e.target.value as ComplaintStatus)}>
-                {(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'] as ComplaintStatus[]).map((s) => (
+              <Select id="m-status" value={status} disabled={!canWork} onChange={(e) => setStatus(e.target.value as ComplaintStatus)}>
+                {(['OPEN', 'IN_PROGRESS', 'RESOLVED'] as ComplaintStatus[]).map((s) => (
                   <option key={s} value={s}>
                     {humanize(s)}
                   </option>
@@ -216,7 +231,7 @@ function ManageModal({ complaint, onClose }: { complaint: Complaint | null; onCl
               </Select>
             </Field>
             <Field label="Priority" htmlFor="m-pri">
-              <Select id="m-pri" value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
+              <Select id="m-pri" value={priority} disabled={!canAssign} onChange={(e) => setPriority(e.target.value as Priority)}>
                 {(Object.keys(PRIORITY_LABEL) as Priority[]).map((p) => (
                   <option key={p} value={p}>
                     {PRIORITY_LABEL[p]}
@@ -226,7 +241,7 @@ function ManageModal({ complaint, onClose }: { complaint: Complaint | null; onCl
             </Field>
           </div>
           <Field label="Assigned to" htmlFor="m-assign">
-            <Select id="m-assign" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)}>
+            <Select id="m-assign" value={assignedToId} disabled={!canAssign} onChange={(e) => setAssignedToId(e.target.value)}>
               <option value="">Unassigned</option>
               <option value={me.id}>Me ({me.name})</option>
               {staff
@@ -242,7 +257,7 @@ function ManageModal({ complaint, onClose }: { complaint: Complaint | null; onCl
             </Select>
           </Field>
           <Field label="Resolution" htmlFor="m-res">
-            <Textarea id="m-res" value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="What was done to fix it" />
+            <Textarea id="m-res" value={resolution} disabled={!canWork} onChange={(e) => setResolution(e.target.value)} placeholder="What was done to fix it" />
           </Field>
         </div>
       )}
@@ -254,7 +269,9 @@ type Filter = 'ACTIVE' | 'ALL' | ComplaintStatus;
 
 export default function ComplaintsPage() {
   const { can } = useAuth();
-  const manager = can('complaints:manage');
+  const me = useUser();
+  const toast = useToast();
+  const manager = can('complaint.view_all') || can('complaint.assign');
   const [filter, setFilter] = useState<Filter>('ACTIVE');
   const { data, error, isLoading, mutate } = useApi<Complaint[]>('/complaints', {
     status: filter === 'ACTIVE' || filter === 'ALL' ? undefined : filter,
@@ -316,10 +333,12 @@ export default function ComplaintsPage() {
                   </div>
                   <p className="mt-1 text-sm text-text-2">{c.description}</p>
                   <p className="mt-2 text-xs text-muted">
-                    {manager && c.raisedBy ? `${c.raisedBy.name} · ` : ''}raised {fmtRelative(c.createdAt)}
+                    {c.escalated ? 'Escalated · ' : ''}
+                    {c.raisedBy && c.raisedById !== me.id ? `${c.raisedBy.name} · ` : ''}raised {fmtRelative(c.createdAt)}
                     {c.assignedTo ? ` · assigned to ${c.assignedTo.name}` : ' · unassigned'}
                     {c.updatedAt !== c.createdAt ? ` · updated ${fmtRelative(c.updatedAt)}` : ''}
                   </p>
+                  <Attachments complaint={c} canAdd={(c.raisedById === me.id || canWorkOn(c, me.id, can)) && c.status !== 'CLOSED'} />
                   {c.resolution && (
                     <p className="mt-2 rounded-md bg-good-soft px-3 py-2 text-xs text-good-ink">
                       <span className="font-semibold">Resolution:</span> {c.resolution}
@@ -328,9 +347,19 @@ export default function ComplaintsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <ComplaintStatusBadge status={c.status} />
-                  {manager && (
+                  {(can('complaint.assign') || canWorkOn(c, me.id, can)) && (
                     <Button size="sm" icon={<Settings2 className="size-3.5" />} onClick={() => setManaging(c)}>
                       Manage
+                    </Button>
+                  )}
+                  {c.raisedById === me.id && c.status === 'RESOLVED' && (
+                    <Button size="sm" variant="ghost" onClick={() => complaintAction(c, 'close', toast)}>
+                      Accept & close
+                    </Button>
+                  )}
+                  {c.raisedById === me.id && (c.status === 'RESOLVED' || c.status === 'CLOSED') && (
+                    <Button size="sm" variant="ghost" icon={<RotateCcw className="size-3.5" />} onClick={() => complaintAction(c, 'reopen', toast)}>
+                      Reopen
                     </Button>
                   )}
                 </div>
@@ -341,6 +370,87 @@ export default function ComplaintsPage() {
       )}
       <RaiseModal open={raising} onClose={() => setRaising(false)} />
       <ManageModal complaint={managing} onClose={() => setManaging(null)} />
+    </div>
+  );
+}
+
+type Can = (p: import('@sportsos/shared').Permission) => boolean;
+
+/** Mirrors the API: assigned handler, complaint managers, or leadership for escalated complaints. */
+function canWorkOn(c: Complaint, meId: string, can: Can) {
+  if (!can('complaint.resolve')) return false;
+  return c.assignedToId === meId || can('complaint.view_all') || (!!c.escalated && can('complaint.view_escalated'));
+}
+
+async function complaintAction(c: Complaint, action: 'escalate' | 'close' | 'reopen', toast: ReturnType<typeof useToast>) {
+  const prompts = { escalate: 'Why does this need leadership attention?', close: 'Closing note (optional)', reopen: 'What is still wrong?' };
+  const note = window.prompt(prompts[action]);
+  if (note === null) return false;
+  if (action !== 'close' && note.trim().length < 3) {
+    toast.warning('Please add a short note');
+    return false;
+  }
+  try {
+    await api.post(`/complaints/${c.id}/${action}`, note.trim() ? { note: note.trim() } : {});
+    toast.success(action === 'escalate' ? 'Escalated' : action === 'close' ? 'Complaint closed' : 'Complaint reopened');
+    await revalidate('/complaints', '/analytics');
+    return true;
+  } catch (err) {
+    toast.error(err);
+    return false;
+  }
+}
+
+function Attachments({ complaint, canAdd }: { complaint: Complaint; canAdd: boolean }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const files = complaint.attachments ?? [];
+
+  async function upload(file: File) {
+    if (file.size > 2 * 1024 * 1024) return toast.warning('Attachments are limited to 2 MB');
+    const form = new FormData();
+    form.append('file', file);
+    setBusy(true);
+    try {
+      await api.upload(`/complaints/${complaint.id}/attachments`, form);
+      toast.success('Attachment added', file.name);
+      await revalidate('/complaints');
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!files.length && !canAdd) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {files.map((f) => (
+        <button
+          key={f.id}
+          type="button"
+          onClick={() => downloadFile(`/complaints/${complaint.id}/attachments/${f.id}`, f.filename).catch((e) => toast.error(e))}
+          className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-1 text-xs text-text-2 hover:text-text"
+        >
+          <Download className="size-3" /> {f.filename}
+        </button>
+      ))}
+      {canAdd && files.length < 3 && (
+        <label className={`inline-flex cursor-pointer items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted hover:text-text ${busy ? 'opacity-60' : ''}`}>
+          <Paperclip className="size-3" /> {busy ? 'Uploading…' : 'Attach photo / PDF'}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            className="sr-only"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void upload(f);
+            }}
+          />
+        </label>
+      )}
     </div>
   );
 }

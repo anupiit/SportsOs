@@ -107,7 +107,7 @@ function EquipmentTable() {
 
 export default function AnalyticsPage() {
   const { can } = useAuth();
-  const allowed = can('analytics:read');
+  const allowed = can('analytics.view');
   const [range, setRange] = useState<Range>('12');
   const [facilityId, setFacilityId] = useState('');
   const [horizon, setHorizon] = useState('14');

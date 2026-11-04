@@ -10,6 +10,7 @@ import { api, errorMessage } from '@/lib/api';
 import { SPORTS } from '@/lib/constants';
 import { fmtDate, fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from '@/lib/format';
 import { revalidate, useApi } from '@/lib/hooks';
+import { LedgerSection, StockMovementSection } from './inventory-extra';
 
 const INVENTORY_PREFIXES = ['/inventory', '/analytics', '/audit'];
 
@@ -164,7 +165,7 @@ export function IssueModal({
           </div>
         )}
         <Field label="Borrower" htmlFor="iss-borrower" hint="Institute email or admission number" required>
-          <Input id="iss-borrower" value={borrower} onChange={(e) => setBorrower(e.target.value)} placeholder="22je0143@iitism.ac.in or 22JE0143" />
+          <Input id="iss-borrower" value={borrower} onChange={(e) => setBorrower(e.target.value)} placeholder="Institute email or admission no." />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Quantity" htmlFor="iss-qty">
@@ -458,6 +459,9 @@ export function ItemDrawer({
               </div>
             </section>
           )}
+
+          {canManage && <StockMovementSection itemId={item.id} />}
+          <LedgerSection itemId={item.id} />
 
           <section>
             <h3 className="mb-2 text-sm font-semibold text-text">Issue history</h3>

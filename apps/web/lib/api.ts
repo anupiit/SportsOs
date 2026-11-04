@@ -3,6 +3,36 @@ import type { AiAskRequest, AiSource, ApiErrorBody } from '@sportsos/shared';
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api').replace(/\/+$/, '');
 
 export const TOKEN_KEY = 'sportsos.token';
+/** Role the user chose to act as; the API verifies it is actually held. */
+export const ACTIVE_ROLE_KEY = 'sportsos.activeRole';
+
+export function getActiveRole(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(ACTIVE_ROLE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveRole(role: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (role) window.localStorage.setItem(ACTIVE_ROLE_KEY, role);
+    else window.localStorage.removeItem(ACTIVE_ROLE_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  const token = getToken();
+  if (token) h.Authorization = `Bearer ${token}`;
+  const role = getActiveRole();
+  if (role) h['X-Active-Role'] = role;
+  return h;
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -75,17 +105,16 @@ function handleUnauthorized(path: string) {
 }
 
 export async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() };
+  if (opts.body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
 
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}${buildQuery(opts.query)}`, {
       method: opts.method ?? 'GET',
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
       signal: opts.signal,
     });
   } catch (err) {
@@ -115,6 +144,8 @@ export const api = {
   post: <T>(path: string, body?: unknown) => apiFetch<T>(path, { method: 'POST', body: body ?? {} }),
   patch: <T>(path: string, body?: unknown) => apiFetch<T>(path, { method: 'PATCH', body: body ?? {} }),
   del: <T>(path: string) => apiFetch<T>(path, { method: 'DELETE' }),
+  put: <T>(path: string, body?: unknown) => apiFetch<T>(path, { method: 'PUT', body: body ?? {} }),
+  upload: <T>(path: string, form: FormData) => apiFetch<T>(path, { method: 'POST', body: form }),
 };
 
 export function errorMessage(err: unknown): string {
@@ -140,13 +171,12 @@ export async function streamAsk(
   onEvent: (event: AskStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const token = getToken();
   const res = await fetch(`${API_URL}/ai/ask/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...authHeaders(),
     },
     body: JSON.stringify(request),
     signal,
@@ -193,4 +223,25 @@ export async function streamAsk(
   }
   buffer += decoder.decode();
   if (buffer) flushLine(buffer);
+}
+
+/** Downloads an authenticated binary response (e.g. a complaint attachment) as a file. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const res = await fetch(`${API_URL}${path}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let body: unknown = text;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      /* not JSON */
+    }
+    throw new ApiError(res.status, messageFrom(body, `Download failed (${res.status})`), body);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
