@@ -155,25 +155,25 @@ Every QR code SportsOS prints is a `sportsos://` URI so one scanner can route by
 
 ## Demo accounts (after `npm run db:seed`)
 
-Password for every demo account: `sportsos123`.
+Password for every **synthetic DEMO** account: `sportsos123`. These are not real IIT (ISM) people; see `IIT_ISM_DATA_INTEGRATION.md`. Permission names changed in this pass; the authoritative route/guard list is in [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
 
 | Role | Email |
 |---|---|
-| ADMIN | admin@iitism.ac.in |
-| DIRECTOR | director@iitism.ac.in |
-| DEAN_SW | dean.sw@iitism.ac.in |
-| SPEC_PRESIDENT | spec.president@iitism.ac.in |
-| SPORTS_OFFICER | peso@iitism.ac.in |
-| GENERAL_SECRETARY | gsec.sports@iitism.ac.in |
-| EVENT_COMMITTEE | events@iitism.ac.in |
-| COACH | coach.football@iitism.ac.in, coach.basketball@iitism.ac.in |
-| GROUND_STAFF | ground@iitism.ac.in |
-| EQUIPMENT_MANAGER | equipment@iitism.ac.in |
-| SECURITY_STAFF | security@iitism.ac.in |
-| OPERATIONS_STAFF | operations@iitism.ac.in |
-| SPORTS_COUNCIL | council@iitism.ac.in |
-| SPORT_COORDINATOR | coord.cricket@iitism.ac.in |
-| HOSTEL_SECRETARY | hostelsec.jasper@iitism.ac.in |
-| MEDIA_NOMINEE | media@iitism.ac.in |
-| CLUB_MEMBER | 22je0143@iitism.ac.in (and ~60 generated students) |
-| STUDENT | student@iitism.ac.in |
+| ADMIN | admin@sportsos.demo |
+| DIRECTOR | director@sportsos.demo |
+| DEAN_SW | dean.sw@sportsos.demo |
+| SPEC_PRESIDENT | spec.president@sportsos.demo |
+| SPORTS_OFFICER | peso@sportsos.demo |
+| GENERAL_SECRETARY | gsec.sports@sportsos.demo |
+| EVENT_COMMITTEE | events@sportsos.demo |
+| COACH | coach.football@sportsos.demo, coach.basketball@sportsos.demo |
+| GROUND_STAFF | ground@sportsos.demo |
+| EQUIPMENT_MANAGER | equipment@sportsos.demo |
+| SECURITY_STAFF | security@sportsos.demo |
+| OPERATIONS_STAFF | operations@sportsos.demo |
+| SPORTS_COUNCIL | council@sportsos.demo |
+| SPORT_COORDINATOR | coord.cricket@sportsos.demo |
+| HOSTEL_SECRETARY | hostelsec.a@sportsos.demo (scope: Hostel A) |
+| MEDIA_NOMINEE | media@sportsos.demo |
+| CLUB_MEMBER | club.member@sportsos.demo (and 60 synthetic `Demo Student NN` accounts) |
+| STUDENT | student@sportsos.demo |

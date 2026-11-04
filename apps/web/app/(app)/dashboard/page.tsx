@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trophy,
-  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';

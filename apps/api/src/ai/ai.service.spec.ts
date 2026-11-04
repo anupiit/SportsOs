@@ -74,6 +74,8 @@ describe('AiService', () => {
   it('falls back to retrieved facts if the API call fails', async () => {
     const ai = service({ ANTHROPIC_API_KEY: 'test-key' });
     await ai.reindex();
+    // a stream that fails before yielding anything
+    // eslint-disable-next-line require-yield
     const failing = { async *[Symbol.asyncIterator]() { throw new Error('network down'); }, finalMessage: async () => ({}) };
     (ai as unknown as { claude: unknown }).claude = { beta: { messages: { stream: () => failing } } };
     const events = await collect(ai.askStream({ question: 'shuttlecock stock' }, STAFF));

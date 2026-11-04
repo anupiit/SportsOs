@@ -58,7 +58,7 @@ export default function FacilityDetailPage() {
       (clubs ?? []).filter(
         (c) => c.myMembership?.role === 'CAPTAIN' || c.myMembership?.role === 'VICE_CAPTAIN' || c.coachId === user.id || c.canManage,
       ),
-    [clubs, user.id, can],
+    [clubs, user.id],
   );
 
   const typeOptions = useMemo(() => {

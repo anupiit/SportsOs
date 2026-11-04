@@ -55,7 +55,7 @@ flowchart TB
 |---|---|
 | **O1** Centralise operations | One PostgreSQL schema (`apps/api/prisma/schema.prisma`) for facilities, bookings, clubs, attendance, inventory, tournaments, complaints and achievements. |
 | **O2** Automate admin processes | Approval workflow with notifications, automatic conflict detection, scheduled jobs (`apps/api/src/jobs`) that close sessions, complete bookings, lapse unreviewed requests, flag overdue loans and send reminders. |
-| **O3** Role-based access control | 18 roles mirroring the §5.1 hierarchy (Director → Dean SW → SPEC → PESO / GSec / Event Committee → staff, council, students) and 20 permissions (`packages/shared/src/permissions.ts`), enforced by global guards. |
+| **O3** Role-based access control | 18 roles (the 17 organisational roles plus the Director) and 70 granular permissions with an explicit, database-backed role→permission matrix; multiple scoped, time-bound roles per user with two-person approval for privileged roles (`apps/api/src/rbac`, [RBAC_PERMISSION_MATRIX.md](docs/RBAC_PERMISSION_MATRIX.md)). |
 | **O4** Real-time analytics | KPIs, weekly participation, facility utilisation + weekday×hour heatmap, demand forecast, equipment wear, attendance-integrity report (`/analytics/*`). |
 | **O5** Student experience | Single portal: bookings with QR gate passes, club membership, attendance history, achievements, notifications, complaints; mobile app for on-ground use. |
 | **O6** Scalable, future-ready | Stateless API in Docker, Prisma migrations, pluggable vector store, AI features degrade gracefully when keys are absent. |
@@ -97,7 +97,7 @@ Requirements: Node.js ≥ 20, npm ≥ 10, Docker (for PostgreSQL).
 cd sportsos
 docker compose up -d --build
 docker compose exec api npm run seed
-open http://localhost:3000          # sign in as peso@iitism.ac.in / sportsos123
+open http://localhost:3000          # sign in as peso@sportsos.demo / sportsos123 (synthetic demo account)
 ```
 
 ### Option B — local development
@@ -108,7 +108,7 @@ npm install                          # installs api + web + shared, builds share
 docker compose up -d postgres        # PostgreSQL on localhost:5432
 cp apps/api/.env.example apps/api/.env
 npm run db:migrate                   # applies prisma/migrations
-npm run db:seed                      # demo data, password sportsos123 for every account
+npm run db:seed                      # SYNTHETIC demo data (refuses to wipe non-demo data), password sportsos123
 npm run dev:api                      # http://localhost:4000/api
 npm run dev:web                      # http://localhost:3000
 ```
@@ -139,33 +139,43 @@ demand with `POST /api/ai/reindex`.
 
 ### Demo accounts
 
-All passwords are `sportsos123`. A few useful ones (the full list is in [docs/API.md](docs/API.md#demo-accounts-after-npm-run-dbseed)):
+All demo passwords are `sportsos123`. **Every seeded account, facility and record is synthetic** (`isDemo`, `[DEMO]` names,
+`@sportsos.demo` emails, `ZZ` admission numbers, `Hostel A–I`). Real IIT (ISM) data enters only through the admin import;
+see [docs/IIT_ISM_DATA_INTEGRATION.md](docs/IIT_ISM_DATA_INTEGRATION.md). A few useful accounts (full list in
+[docs/API.md](docs/API.md#demo-accounts-after-npm-run-dbseed)):
 
 | Account | Sees |
 |---|---|
-| `peso@iitism.ac.in` | Sports Officer: approvals, facilities, inventory, analytics, audit, AI reports |
-| `coach.football@iitism.ac.in` | Starts verified-attendance sessions, manages the Football Club roster |
-| `22je0143@iitism.ac.in` | Club member (Anup Kumar): bookings, check-in, clubs, achievements |
-| `equipment@iitism.ac.in` | QR issue/return, stock alerts |
-| `security@iitism.ac.in` | Gate-pass check-in |
-| `events@iitism.ac.in` | Tournaments and fixtures |
-| `director@iitism.ac.in` | Read-only executive view |
-
-The seed generates about 10 weeks of history: about 2.7k bookings, 1k verified check-ins, 270 equipment loans and
-3 tournaments. Dashboards and the forecast have real data to show from the first login.
+| `peso@sportsos.demo` | Sports Officer: approvals, facilities, inventory, analytics, audit, AI reports, role assignment |
+| `dean.sw@sportsos.demo` | Dean SW: institution-wide analytics, escalated complaints, event proposals, role approvals |
+| `admin@sportsos.demo` | System Administrator: users, roles, permission matrix, imports, audit (no operational approvals) |
+| `coach.football@sportsos.demo` | Starts verified-attendance sessions and manages the Football Club roster only |
+| `club.member@sportsos.demo` | Club member: bookings, check-in, clubs, achievements |
+| `media@sportsos.demo` | Media nominee **and** temporary Event Committee member: try the "Acting as" role switcher |
+| `hostelsec.a@sportsos.demo` | Hostel A sports secretary: registers Hostel A teams only |
+| `security@sportsos.demo` | Gate-pass check-in and the day's entry log (name and admission no. only) |
 
 **Trying GPS check-in away from Dhanbad:** seeded facilities sit at placeholder coordinates near the campus
-(≈ 23.814 N, 86.441 E). Sign in as `peso@iitism.ac.in`, open the facility and use **Use my current location** to
+(≈ 23.814 N, 86.441 E). Sign in as `peso@sportsos.demo`, open the facility and use **Use my current location** to
 move its geofence to where you are. Then start a session as a coach and check in from a phone.
 
 ## Testing
 
 ```bash
 npm test                                  # unit tests: OTP (RFC vectors), geofence, hash chain, brackets, Holt-Winters
-npm run test:smoke -w @sportsos/api       # 76 end-to-end checks against a running, freshly seeded API
+npm run test:smoke -w @sportsos/api       # 83 end-to-end checks against a running, freshly seeded API
+npm run test:e2e -w @sportsos/api         # 200 RBAC / workflow checks across all 18 roles (writes TEST data)
+npm run lint && npm run typecheck         # ESLint + TypeScript for api and web
 npm run typecheck -w @sportsos/web        # web type check
 (cd apps/mobile && npx tsc --noEmit)      # mobile type check
 ```
+
+## Documentation
+
+[Implementation audit](docs/SPORTSOS_IMPLEMENTATION_AUDIT.md) · [RBAC matrix](docs/RBAC_PERMISSION_MATRIX.md) ·
+[IIT (ISM) data integration](docs/IIT_ISM_DATA_INTEGRATION.md) · [API](docs/API_DOCUMENTATION.md) ·
+[Database changes](docs/DATABASE_CHANGES.md) · [Test report](docs/TEST_REPORT.md) ·
+[Environment setup](docs/ENVIRONMENT_SETUP.md) · [Changelog](docs/IMPLEMENTATION_CHANGELOG.md)
 
 ## Security notes and limitations
 

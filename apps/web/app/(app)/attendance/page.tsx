@@ -54,13 +54,12 @@ type Tab = 'run' | 'checkin' | 'history';
 
 function StartSessionCard({ onStarted }: { onStarted: (s: AttendanceSession) => void }) {
   const user = useUser();
-  const { can } = useAuth();
   const toast = useToast();
   const { data: facilities } = useApi<Facility[]>('/facilities');
   const { data: clubs } = useApi<Club[]>('/clubs');
   const myClubs = useMemo(
     () => (clubs ?? []).filter((c) => c.coachId === user.id || c.canManage),
-    [clubs, user.id, can],
+    [clubs, user.id],
   );
   const openFacilities = (facilities ?? []).filter((f) => f.status === 'OPEN');
   const [title, setTitle] = useState('');
