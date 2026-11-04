@@ -17,7 +17,7 @@ import type { Booking } from '../../src/types';
 export default function PassScreen() {
   const { can } = useAuth();
   const { token, auto } = useLocalSearchParams<{ token: string; auto?: string }>();
-  const allowed = can('bookings:checkin');
+  const allowed = can('booking.verify');
   const [busy, setBusy] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
   const [error, setError] = useState<string | null>(null);

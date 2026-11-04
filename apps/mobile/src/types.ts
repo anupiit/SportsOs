@@ -56,27 +56,17 @@ export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'System Administrator',
 };
 
+/**
+ * Permissions the mobile client checks (names from packages/shared/src/permissions.ts).
+ * The API enforces every one of them; the app only uses them to hide controls.
+ */
 export type Permission =
-  | 'facilities:manage'
-  | 'facilities:status'
-  | 'bookings:approve'
-  | 'bookings:checkin'
-  | 'bookings:read_all'
-  | 'clubs:manage'
-  | 'clubs:roster'
-  | 'attendance:manage'
-  | 'inventory:manage'
-  | 'inventory:issue'
-  | 'events:manage'
-  | 'events:score'
-  | 'analytics:read'
-  | 'ai:report'
-  | 'users:read'
-  | 'users:manage'
-  | 'complaints:manage'
-  | 'notifications:broadcast'
-  | 'audit:read'
-  | 'achievements:verify';
+  | 'booking.verify'
+  | 'inventory.issue'
+  | 'inventory.return'
+  | 'attendance.manage'
+  | 'analytics.view'
+  | (string & {});
 
 // ---------------------------------------------------------------- enums
 export type FacilityType = 'GROUND' | 'COURT' | 'INDOOR_HALL' | 'POOL' | 'GYM' | 'TRACK';
@@ -226,10 +216,12 @@ export interface AttendanceRecord {
   session?: Pick<AttendanceSession, 'id' | 'title' | 'startsAt'>;
   userId: string;
   checkedInAt: ISODate;
-  latitude: number;
-  longitude: number;
-  accuracyM: number;
-  distanceM: number;
+  /** null for MANUAL corrections made by staff */
+  latitude: number | null;
+  longitude: number | null;
+  accuracyM: number | null;
+  distanceM: number | null;
+  method?: 'VERIFIED' | 'MANUAL';
 }
 
 export interface CheckInRequest {

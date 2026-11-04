@@ -106,7 +106,7 @@ export default function ProfileScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.recordTitle}>{r.session?.title ?? 'Practice session'}</Text>
                     <Muted>
-                      {formatDateTime(r.checkedInAt)} · {metres(r.distanceM)} from centre
+                      {formatDateTime(r.checkedInAt)} · {r.distanceM === null ? 'manual entry by staff' : `${metres(r.distanceM)} from centre`}
                     </Muted>
                   </View>
                 </View>

@@ -8,11 +8,11 @@ import { Button, ErrorBanner, Field } from '../src/components/ui';
 import { colors, radius, space } from '../src/theme';
 
 const DEMO = [
-  { label: 'Student', email: '22je0143@iitism.ac.in' },
-  { label: 'Coach', email: 'coach.football@iitism.ac.in' },
-  { label: 'Equipment', email: 'equipment@iitism.ac.in' },
-  { label: 'Security', email: 'security@iitism.ac.in' },
-  { label: 'PESO', email: 'peso@iitism.ac.in' },
+  { label: 'Student', email: 'club.member@sportsos.demo' },
+  { label: 'Coach', email: 'coach.football@sportsos.demo' },
+  { label: 'Equipment', email: 'equipment@sportsos.demo' },
+  { label: 'Security', email: 'security@sportsos.demo' },
+  { label: 'PESO', email: 'peso@sportsos.demo' },
 ];
 
 export default function LoginScreen() {
@@ -57,7 +57,7 @@ export default function LoginScreen() {
               label="Institute email"
               value={email}
               onChangeText={setEmail}
-              placeholder="22je0143@iitism.ac.in"
+              placeholder="club.member@sportsos.demo"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"

@@ -246,7 +246,7 @@ export default function CheckInScreen() {
         <Muted style={{ flex: 1 }}>
           SportsOS verifies the rotating code, your GPS position against the facility's geofence, and that this phone hasn't
           checked in anyone else for the session.
-          {can('attendance:manage') ? ' Open sessions and show the code from the SportsOS web dashboard.' : ''}
+          {can('attendance.manage') ? ' Open sessions and show the code from the SportsOS web dashboard.' : ''}
         </Muted>
       </View>
     </Screen>

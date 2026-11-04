@@ -30,7 +30,7 @@ export default function ScanScreen() {
     }, []),
   );
 
-  const canCheckInPasses = can('bookings:checkin');
+  const canCheckInPasses = can('booking.verify');
 
   const route = useCallback(
     (payload: QrPayload) => {
@@ -121,7 +121,7 @@ export default function ScanScreen() {
           <Ionicons name="information-circle-outline" size={18} color={colors.blue} />
           <Text style={styles.hintTitle}>What can I scan?</Text>
         </Row>
-        <Muted>• Equipment labels — see stock{can('inventory:issue') ? ', issue and receive returns' : ' and your borrowings'}</Muted>
+        <Muted>• Equipment labels — see stock{can('inventory.issue') ? ', issue and receive returns' : ' and your borrowings'}</Muted>
         <Muted>• Session QR on your coach's screen — opens verified check-in</Muted>
         <Muted>• Booking gate passes{canCheckInPasses ? ' — checks the booking in' : ' (staff only)'}</Muted>
       </Card>
