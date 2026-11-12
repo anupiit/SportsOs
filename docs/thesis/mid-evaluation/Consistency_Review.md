@@ -76,7 +76,7 @@ No objective was added, removed or reworded. ✅
 | Dec 2026 — Council hub & tournament brackets | Done early |
 | Jan 2027 — AI integration (Pinecone), executive dashboards | Partial (dashboards done; AI offline only) |
 | Feb 2027 — React Native client with QR | Partial (implemented, type-checked; not device-tested) |
-| Mar–Apr 2027 — Hardening, final demo | Planned (re-scoped in report §7.8 and Figure 7.1) |
+| Mar–Apr 2027 — Hardening, final demo | Planned (re-scoped in report §7.4 and Figure 7.1) |
 
 ## 7. PPT checklist (keep the slides identical to the report)
 
@@ -103,7 +103,7 @@ Use these exact figures and labels on the mid-evaluation slides.
 
 **Status vocabulary:** use Implemented / Tested / Partial / Planned only, matching report Table 5.2.
 
-**Limitations slide:** L-01 to L-12 from report Table 7.2. At minimum include:
+**Limitations slide:** L-01 to L-08 from report Table 7.2. At minimum include:
 
 - no password reset;
 - no Redis;
@@ -133,5 +133,4 @@ Inter-Hostel General Championship). Do not name coaches or staff.
    (they were unreachable from the evaluation sandbox).
 2. Validate the stakeholder hierarchy and roles with SPEC.
 3. Read the full texts of [6], [7] and [11] and extend the literature review where they support it.
-4. Confirm the departmental page limit. The body is currently 48 pages (≈12,100 words), against the brief's
-   approximate 20–25.
+4. Confirm the departmental page limit. The main body (Chapters 1–7) is now 30 pages; the whole PDF is 51 pages including front matter, references and appendices.

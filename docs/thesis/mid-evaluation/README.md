@@ -3,8 +3,8 @@
 | File | What it is |
 |---|---|
 | `SportsOS_Mid_Evaluation_Report_22JE0143.docx` | Editable report (A4, Times New Roman 12 pt, 1.5 spacing, IEEE references) |
-| `SportsOS_Mid_Evaluation_Report_22JE0143.pdf` | PDF rendering of the same report (73 pages: cover + 7 front-matter, 48 body, 3 references, 14 appendices) |
-| `Bibliography.md` | The 35 cited references, with verification notes |
+| `SportsOS_Mid_Evaluation_Report_22JE0143.pdf` | PDF rendering of the same report (51 pages: cover + 7 front-matter, 30 body, 2 references, 11 appendices) |
+| `Bibliography.md` | The 34 cited references, with verification notes |
 | `Implementation_Evidence_Matrix.md` | Module → code → test evidence, plus a recheck of previously reported issues |
 | `Consistency_Review.md` | Report vs. proposal comparison and a checklist for the mid-evaluation PPT |
 | `figures/` | Diagrams used in the report (PNG), reusable in the PPT |
