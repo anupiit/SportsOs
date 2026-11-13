@@ -103,7 +103,7 @@ Use these exact figures and labels on the mid-evaluation slides.
 
 **Status vocabulary:** use Implemented / Tested / Partial / Planned only, matching report Table 5.2.
 
-**Limitations slide:** L-01 to L-08 from report Table 7.2. At minimum include:
+**Limitations slide:** the items in report Table 7.2. At minimum include:
 
 - no password reset;
 - no Redis;
@@ -133,4 +133,4 @@ Inter-Hostel General Championship). Do not name coaches or staff.
    (they were unreachable from the evaluation sandbox).
 2. Validate the stakeholder hierarchy and roles with SPEC.
 3. Read the full texts of [6], [7] and [11] and extend the literature review where they support it.
-4. Confirm the departmental page limit. The main body (Chapters 1–7) is now 30 pages; the whole PDF is 51 pages including front matter, references and appendices.
+4. The report is 27 pages in total (21 pages of chapters), within the 30-page target.
