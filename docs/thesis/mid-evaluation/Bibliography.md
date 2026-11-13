@@ -3,8 +3,8 @@
 IEEE style, numbered in order of first citation in the report. Verification notes follow the list.
 
 [1] A. Kumar, "SportsOS: An AI-Powered Sports ERP for IIT (ISM) Dhanbad," Integrated M.Tech thesis proposal, Dept. of Mathematics and Computing, IIT (ISM) Dhanbad, Aug. 2026.
-[2] Sports & Physical Education Center (SPEC), IIT (ISM) Dhanbad, "Activities." [Online]. Available: https://people.iitism.ac.in/~dsw/spec/activity.html (content consulted through a search-engine index on 12 Nov. 2026; page undated).
-[3] Sports & Physical Education Center (SPEC), IIT (ISM) Dhanbad, "Facilities." [Online]. Available: https://people.iitism.ac.in/~dsw/spec/facilities.html (content consulted through a search-engine index on 12 Nov. 2026; page undated).
+[2] Sports & Physical Education Center (SPEC), IIT (ISM) Dhanbad, "Activities." [Online]. Available: https://people.iitism.ac.in/~dsw/spec/activity.html (accessed Nov. 12, 2026).
+[3] Sports & Physical Education Center (SPEC), IIT (ISM) Dhanbad, "Facilities." [Online]. Available: https://people.iitism.ac.in/~dsw/spec/facilities.html (accessed Nov. 12, 2026).
 [4] L. Haffner, I. Oshri, and J. Kotlarsky, "Directions for future IS research on sports digitalisation: A stakeholder perspective," *The Journal of Strategic Information Systems*, vol. 34, no. 2, Art. no. 101905, 2025, doi: 10.1016/j.jsis.2025.101905.
 [5] D. E. W. Saputra and P. Asmawati, "Elevating user experience and service excellence in sports facilities via integrated management information systems: A systematic review," *Sports Science and Health*, vol. 15, no. V, pp. 111–118, 2025, doi: 10.7251/SSH25V111S.
 [6] OWASP Foundation, *OWASP Top 10: 2021*. [Online]. Available: https://owasp.org/Top10/
